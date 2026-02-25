@@ -1,0 +1,10 @@
+/b/
+/id/
+/i/
+/bd/
+/b-*/
+/bd-*/
+/id-*/
+.DS_Store
+cmake-build-debug
+.idea
