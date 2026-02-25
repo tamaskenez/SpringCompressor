@@ -16,7 +16,7 @@ The _submodules subdir contains only external projects which should not be chang
 Avoid MacOS-specific code whenever possible.
 
 ## CMake hints
-Set up the project for C++26.
+Set up the project for C++23.
 Prefer adding source files to targets via globbing. Collect and set up source files like this:
 
 ```CMake

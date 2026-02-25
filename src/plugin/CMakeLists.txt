@@ -12,13 +12,10 @@ juce_add_plugin(SpringCompressor
     PRODUCT_NAME "Spring Compressor"
 )
 
-target_sources(SpringCompressor
-    PRIVATE
-        PluginProcessor.cpp
-        PluginProcessor.h
-        PluginEditor.cpp
-        PluginEditor.h
-)
+file(GLOB_RECURSE sources CONFIGURE_DEPENDS *.h *.cpp)
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
+
+target_sources(SpringCompressor PRIVATE ${sources})
 
 target_compile_definitions(SpringCompressor
     PUBLIC
