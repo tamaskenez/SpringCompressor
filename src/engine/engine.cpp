@@ -20,14 +20,14 @@ struct EngineImpl : public Engine {
 
     std::vector<float> envelope; // per-channel gain-reduction state (dB, <= 0)
 
-    void prepare(double sr, int /*maxBlockSize*/, int numChannels) override
+    void prepare_to_play(double sr, int /*maxBlockSize*/, int numChannels) override
     {
         sampleRate = sr;
         envelope.assign(numChannels, 0.0f);
         updateCoefficients();
     }
 
-    void reset() override
+    void release_resources() override
     {
         std::ranges::fill(envelope, 0.0f);
     }

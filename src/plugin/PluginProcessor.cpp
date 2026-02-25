@@ -72,12 +72,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
 
 void SpringCompressorProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    engine->prepare(sampleRate, samplesPerBlock, getTotalNumInputChannels());
+    engine->prepare_to_play(sampleRate, samplesPerBlock, getTotalNumInputChannels());
 }
 
 void SpringCompressorProcessor::releaseResources()
 {
-    engine->reset();
+    engine->release_resources();
 }
 
 void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
