@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Build
 
 ```bash
@@ -9,17 +7,24 @@ cmake -S . -B _b -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build _b
 ```
 
-JUCE is included as a git submodule at `_submodules/JUCE`. If it's missing, run:
-```bash
-git submodule update --init --recursive
-```
+## Directory structure
 
-## Linting / Formatting
-
-```bash
-./clang-format-all.sh
-```
+The _submodules subdir contains only external projects which should not be changed.
 
 ## Architecture
 
-Avoid macOS-specific code whenever possible.
+Avoid MacOS-specific code whenever possible.
+
+## CMake hints
+Set up the project for C++26.
+Prefer adding source files to targets via globbing. Collect and set up source files like this:
+
+```CMake
+file(GLOB_RECURSE sources CONFIGURE_DEPENDS *.h *.cpp)
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
+```
+
+## Coding style
+
+Use snake-case for symbols, except for type use CamelCase.
+Call `clang-format -i` for *.cpp and *.h files after changing them.
