@@ -12,25 +12,51 @@ public:
     SpringCompressorProcessor();
     ~SpringCompressorProcessor() override = default;
 
+    const juce::String getName() const override
+    {
+        return JucePlugin_Name;
+    }
+
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
+    double getTailLengthSeconds() const override
+    {
+        return 0.0;
+    }
+    bool acceptsMidi() const override
+    {
+        return false;
+    }
+    bool producesMidi() const override
+    {
+        return false;
+    }
+
     juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override { return true; }
+    bool hasEditor() const override
+    {
+        return true;
+    }
 
-    const juce::String getName() const override { return JucePlugin_Name; }
-
-    bool acceptsMidi() const override { return false; }
-    bool producesMidi() const override { return false; }
-    bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
-
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
+    int getNumPrograms() override
+    {
+        return 1;
+    }
+    int getCurrentProgram() override
+    {
+        return 0;
+    }
     void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
-    void changeProgramName(int, const juce::String&) override {}
+    const juce::String getProgramName(int) override
+    {
+        return program0_name;
+    }
+    void changeProgramName(int, const juce::String& newName) override
+    {
+        program0_name = newName;
+    }
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
@@ -39,6 +65,7 @@ public:
 
 private:
     std::unique_ptr<Engine> engine;
+    juce::String program0_name = "program#0";
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

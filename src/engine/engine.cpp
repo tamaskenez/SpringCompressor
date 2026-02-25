@@ -60,9 +60,18 @@ struct EngineImpl : public Engine {
         }
     }
 
-    void setThresholdDb(float dB) override { thresholdDb = dB; }
-    void setRatio(float r) override { ratio = r; }
-    void setMakeupGainDb(float dB) override { makeupGainDb = dB; }
+    void setThresholdDb(float dB) override
+    {
+        thresholdDb = dB;
+    }
+    void setRatio(float r) override
+    {
+        ratio = r;
+    }
+    void setMakeupGainDb(float dB) override
+    {
+        makeupGainDb = dB;
+    }
 
     void setAttackMs(float ms) override
     {

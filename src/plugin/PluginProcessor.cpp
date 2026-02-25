@@ -3,11 +3,13 @@
 #include "PluginEditor.h"
 
 SpringCompressorProcessor::SpringCompressorProcessor()
-    : AudioProcessor(BusesProperties()
-                         .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, nullptr, "Parameters", createParameterLayout()),
-      engine(make_engine())
+    : AudioProcessor(
+        BusesProperties()
+          .withInput("Input", juce::AudioChannelSet::stereo(), true)
+          .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+      )
+    , apvts(*this, nullptr, "Parameters", createParameterLayout())
+    , engine(make_engine())
 {
 }
 
@@ -15,30 +17,55 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"threshold", 1}, "Threshold",
-        juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -20.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel("dB")));
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"threshold", 1},
+        "Threshold",
+        juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f),
+        -20.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("dB")
+      )
+    );
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"ratio", 1}, "Ratio",
-        juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f, 0.5f), 4.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel(":1")));
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"ratio", 1},
+        "Ratio",
+        juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f, 0.5f),
+        4.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel(":1")
+      )
+    );
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"attack", 1}, "Attack",
-        juce::NormalisableRange<float>(0.1f, 200.0f, 0.1f, 0.5f), 10.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel("ms")));
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"attack", 1},
+        "Attack",
+        juce::NormalisableRange<float>(0.1f, 200.0f, 0.1f, 0.5f),
+        10.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("ms")
+      )
+    );
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"release", 1}, "Release",
-        juce::NormalisableRange<float>(1.0f, 2000.0f, 1.0f, 0.5f), 100.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel("ms")));
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"release", 1},
+        "Release",
+        juce::NormalisableRange<float>(1.0f, 2000.0f, 1.0f, 0.5f),
+        100.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("ms")
+      )
+    );
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"makeup", 1}, "Makeup Gain",
-        juce::NormalisableRange<float>(-12.0f, 24.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel("dB")));
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"makeup", 1},
+        "Makeup Gain",
+        juce::NormalisableRange<float>(-12.0f, 24.0f, 0.1f),
+        0.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("dB")
+      )
+    );
 
     return {params.begin(), params.end()};
 }
