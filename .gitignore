@@ -1,11 +1,6 @@
 /_b/
-/b/
-/id/
-/i/
 /bd/
-/b-*/
-/bd-*/
-/id-*/
 .DS_Store
-cmake-build-debug
+/cmake-build-debug
 .idea
+/.claude
