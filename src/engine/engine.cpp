@@ -33,30 +33,14 @@ struct EngineImpl : public Engine {
     }
 
     // Feedforward peak compressor (Giannoulis et al. 2013, type 1).
-    void process_block(float* const* channelData, int numChannels, int numSamples) override
+    void process_block(std::span<float* const> channelData, int numSamples) override
     {
         const float makeupLinear = std::pow(10.0f, makeupGainDb / 20.0f);
 
-        for (int ch = 0; ch < numChannels && ch < static_cast<int>(envelope.size()); ++ch) {
-            float* data = channelData[ch];
-            float env = envelope[ch];
-
+        for (auto* channel_buf : channelData) {
             for (int i = 0; i < numSamples; ++i) {
-                const float xAbs = std::abs(data[i]);
-                const float xDb = xAbs > 1e-6f ? 20.0f * std::log10(xAbs) : kFloorDb;
-
-                // Gain computer: hard-knee static characteristic.
-                const float gcDb = xDb < thresholdDb ? xDb : thresholdDb + (xDb - thresholdDb) / ratio;
-                const float grDb = gcDb - xDb; // <= 0
-
-                // Ballistics: attack when gain reduction deepens, release when recovering.
-                const float coeff = grDb < env ? attackCoeff : releaseCoeff;
-                env = coeff * env + (1.0f - coeff) * grDb;
-
-                data[i] *= std::pow(10.0f, env / 20.0f) * makeupLinear;
+                channel_buf[i] *= makeupLinear;
             }
-
-            envelope[ch] = env;
         }
     }
 

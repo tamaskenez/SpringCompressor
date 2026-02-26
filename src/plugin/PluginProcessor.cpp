@@ -3,6 +3,8 @@
 #include "PluginEditor.h"
 
 #include <cassert>
+#include <ranges>
+#include <span>
 
 SpringCompressorProcessor::SpringCompressorProcessor()
     : AudioProcessor(
@@ -93,7 +95,11 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 {
     juce::ScopedNoDenormals noDenormals;
 
-    assert(getTotalNumInputChannels() == getTotalNumOutputChannels());
+    // In isBusesLayoutSupported we only enabled layouts which satisfy this.
+    assert(getMainBusNumInputChannels() == getMainBusNumOutputChannels());
+    // We don't have any sidechains for now.
+    assert(getMainBusNumInputChannels() == getTotalNumInputChannels());
+    assert(getMainBusNumOutputChannels() == getTotalNumOutputChannels());
 
     engine->setThresholdDb(raw_parameter_values.threshold_db->load());
     engine->setRatio(raw_parameter_values.ratio->load());
@@ -101,7 +107,15 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     engine->setReleaseMs(raw_parameter_values.release_ms->load());
     engine->setMakeupGainDb(raw_parameter_values.makeup_gain_db->load());
 
-    engine->process_block(buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples());
+    auto input_buffer = getBusBuffer(buffer, true, 0);
+    auto output_buffer = getBusBuffer(buffer, false, 0);
+    auto num_channels = static_cast<size_t>(input_buffer.getNumChannels());
+    assert(std::cmp_equal(output_buffer.getNumChannels(), num_channels));
+    // In practice, these will be the same pointers.
+    auto read_pointers = std::span(input_buffer.getArrayOfReadPointers(), num_channels);
+    auto write_pointers = std::span(output_buffer.getArrayOfWritePointers(), num_channels);
+    assert(std::ranges::equal(read_pointers, write_pointers));
+    engine->process_block(write_pointers, buffer.getNumSamples());
 }
 
 juce::AudioProcessorEditor* SpringCompressorProcessor::createEditor()
