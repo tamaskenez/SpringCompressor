@@ -14,6 +14,7 @@ set(TESTING_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/_o")
 file(MAKE_DIRECTORY ${TESTING_OUTPUT_DIR})
 
 add_subdirectory(_submodules/JUCE)
+add_subdirectory(_submodules/meadow)
 
 find_package(GTest REQUIRED CONFIG)
 

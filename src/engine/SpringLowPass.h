@@ -7,7 +7,8 @@ class SpringLowPass
 {
 public:
     explicit SpringLowPass(double sample_rate_arg);
-    double process(double sample_in);
+
+    [[nodiscard]] double process(double sample_in);
 
     // Set spring_constant and damping_constant such that the resulting system will be critically damped with a time
     // constant of tau.

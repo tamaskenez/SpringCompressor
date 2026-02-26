@@ -1,79 +1,83 @@
 #include "engine.h"
 
-#include <algorithm>
-#include <cmath>
+#include "SpringLowPass.h"
+#include "TransferCurve.h"
+
+#include <meadow/math.h>
+#include <meadow/matlab.h>
+
+#include <cassert>
 #include <vector>
 
-static constexpr float kFloorDb = -120.0f;
-
 struct EngineImpl : public Engine {
-    double sampleRate = 44100.0;
+    double sample_rate = 44100.0;
 
-    float thresholdDb = -20.0f;
-    float ratio = 4.0f;
-    float attackMs = 10.0f;
-    float releaseMs = 100.0f;
-    float makeupGainDb = 0.0f;
+    std::vector<SpringLowPass> gain_filters;
+    TransferCurve transfer_curve;
 
-    float attackCoeff = 0.0f;
-    float releaseCoeff = 0.0f;
+    float attack_ms = 10.0f;
+    float release_ms = 100.0f;
 
-    std::vector<float> envelope; // per-channel gain-reduction state (dB, <= 0)
-
-    void prepare_to_play(double sr, int /*maxBlockSize*/, int numChannels) override
+    void update_gain_filter_pars()
     {
-        sampleRate = sr;
-        envelope.assign(numChannels, 0.0f);
-        updateCoefficients();
+        // Note: this might be called on audio thread.
+        for (auto& f : gain_filters) {
+            f.set_critically_damped_with_time_constant(attack_ms / 1000, release_ms / 1000);
+        }
+    }
+    void prepare_to_play(double sr, int /*maxBlockSize*/, int num_channels) override
+    {
+        sample_rate = sr;
+        gain_filters.assign(num_channels, SpringLowPass(sample_rate));
+        update_gain_filter_pars();
     }
 
     void release_resources() override
     {
-        std::ranges::fill(envelope, 0.0f);
+        gain_filters.clear();
     }
 
-    // Feedforward peak compressor (Giannoulis et al. 2013, type 1).
-    void process_block(std::span<float* const> channelData, int numSamples) override
+    void process_block(std::span<float* const> channel_data, int num_samples) override
     {
-        const float makeupLinear = std::pow(10.0f, makeupGainDb / 20.0f);
-
-        for (auto* channel_buf : channelData) {
-            for (int i = 0; i < numSamples; ++i) {
-                channel_buf[i] *= makeupLinear;
+        // The algorithm:
+        // - Take the instantaneous level of the input signal (db of the square sample)
+        // - Apply the compressor's transfer curve and compute the necessary gain
+        // - Low-pass filter the gain and apply it on the sample
+        // TODO: test whether non-standard linear gain smoothing makes sense or needs to be replaced by
+        // a more straightforward, level-detector and db smoothing.
+        assert(channel_data.size() == gain_filters.size());
+        for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
+            auto* channel_buf = channel_data[ch_ix];
+            auto& gf = gain_filters[ch_ix];
+            for (int i = 0; i < num_samples; ++i) {
+                const auto instantaneous_gain = transfer_curve.gain_for_input_db(matlab::mag2db(abs(channel_buf[i])));
+                const auto smoothed_gain = static_cast<float>(gf.process(instantaneous_gain));
+                channel_buf[i] *= smoothed_gain;
             }
         }
     }
 
-    void setThresholdDb(float dB) override
+    void set_threshold_db(float dB) override
     {
-        thresholdDb = dB;
+        transfer_curve.set_threshold_db(dB);
     }
-    void setRatio(float r) override
+    void set_ratio(float r) override
     {
-        ratio = r;
+        transfer_curve.set_ratio(r);
     }
-    void setMakeupGainDb(float dB) override
+    void set_makeup_gain_db(float /*dB*/) override
     {
-        makeupGainDb = dB;
+        // TODO: remove or implement.
     }
-
-    void setAttackMs(float ms) override
+    void set_attack_ms(float ms) override
     {
-        attackMs = ms;
-        updateCoefficients();
+        attack_ms = ms;
+        update_gain_filter_pars();
     }
-
-    void setReleaseMs(float ms) override
+    void set_release_ms(float ms) override
     {
-        releaseMs = ms;
-        updateCoefficients();
-    }
-
-    void updateCoefficients()
-    {
-        // alpha = exp(-1 / (tau_samples)) where tau = time_ms * sampleRate / 1000
-        attackCoeff = std::exp(-1.0f / (static_cast<float>(sampleRate) * attackMs * 0.001f));
-        releaseCoeff = std::exp(-1.0f / (static_cast<float>(sampleRate) * releaseMs * 0.001f));
+        release_ms = ms;
+        update_gain_filter_pars();
     }
 };
 

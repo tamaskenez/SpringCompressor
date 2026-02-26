@@ -27,7 +27,6 @@ double SpringLowPass::process(double sample_in)
     // Derivatives: dy/dt = v,  dv/dt = k*(x - y) - c*v
     auto acc = [&](double y, double v) {
         const bool need_to_go_up = sample_in > y;
-        // const bool going_up = v > 0;
         const auto spring_constant = need_to_go_up ? up_constants.spring : down_constants.spring;
         const auto damping_constant = need_to_go_up ? up_constants.damping : down_constants.damping;
         return spring_constant * (sample_in - y) - damping_constant * v;
