@@ -43,3 +43,4 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
 
 Use snake-case for symbols, except for type use CamelCase.
 Call `clang-format -i` for *.cpp and *.h files after changing them.
+When possible, use std::format, std::print, std::println instead of the older, overloaded "<<" operator based techniques.

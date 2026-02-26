@@ -8,6 +8,12 @@ class SpringLowPass
 public:
     explicit SpringLowPass(double sample_rate_arg);
 
+    void set_state(double mass_position_arg, double mass_velocity_arg)
+    {
+        mass_position = mass_position_arg;
+        mass_velocity = mass_velocity_arg;
+    }
+
     [[nodiscard]] double process(double sample_in);
 
     // Set spring_constant and damping_constant such that the resulting system will be critically damped with a time

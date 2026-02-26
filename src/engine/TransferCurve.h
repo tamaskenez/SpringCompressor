@@ -21,7 +21,8 @@ public:
     }
     [[nodiscard]] float gain_for_input_db(float input_db) const
     {
-        return matlab::db2mag(apply_as_db(input_db) - input_db);
+        return input_db < threshold_db ? 1.0f
+                                       : matlab::db2mag((input_db - threshold_db) / ratio + threshold_db - input_db);
     }
 
 private:

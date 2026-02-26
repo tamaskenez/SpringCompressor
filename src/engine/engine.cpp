@@ -29,6 +29,9 @@ struct EngineImpl : public Engine {
     {
         sample_rate = sr;
         gain_filters.assign(num_channels, SpringLowPass(sample_rate));
+        for (auto& f : gain_filters) {
+            f.set_state(0.0, 0.0);
+        }
         update_gain_filter_pars();
     }
 
@@ -37,22 +40,26 @@ struct EngineImpl : public Engine {
         gain_filters.clear();
     }
 
-    void process_block(std::span<float* const> channel_data, int num_samples) override
+    void process_block(std::span<float* const> channel_data, int num_samples, std::vector<Trace>* trace_block) override
     {
-        // The algorithm:
-        // - Take the instantaneous level of the input signal (db of the square sample)
-        // - Apply the compressor's transfer curve and compute the necessary gain
-        // - Low-pass filter the gain and apply it on the sample
-        // TODO: test whether non-standard linear gain smoothing makes sense or needs to be replaced by
-        // a more straightforward, level-detector and db smoothing.
         assert(channel_data.size() == gain_filters.size());
+#ifndef NDEBUG
+        if (trace_block) {
+            trace_block->clear();
+        }
+#endif
         for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
             auto* channel_buf = channel_data[ch_ix];
             auto& gf = gain_filters[ch_ix];
             for (int i = 0; i < num_samples; ++i) {
-                const auto instantaneous_gain = transfer_curve.gain_for_input_db(matlab::mag2db(abs(channel_buf[i])));
-                const auto smoothed_gain = static_cast<float>(gf.process(instantaneous_gain));
-                channel_buf[i] *= smoothed_gain;
+                const auto smoothed_signal_power = static_cast<float>(gf.process(square(channel_buf[i])));
+                const auto gain = transfer_curve.gain_for_input_db(matlab::pow2db(smoothed_signal_power));
+                channel_buf[i] *= gain;
+#ifndef NDEBUG
+                if (trace_block && ch_ix == 0) {
+                    trace_block->emplace_back(Trace{smoothed_signal_power, gain});
+                }
+#endif
             }
         }
     }
