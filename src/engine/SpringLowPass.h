@@ -2,6 +2,7 @@
 
 // Low-pass filter using the physical simulation of a mass on a spring.
 // The input sample is the free end of the spring, the other end with the mass is the output.
+// The behavior can be set differently depending on whether the input signal is above or below the output signal.
 class SpringLowPass
 {
 public:
@@ -10,10 +11,18 @@ public:
 
     // Set spring_constant and damping_constant such that the resulting system will be critically damped with a time
     // constant of tau.
-    void set_critically_damped_with_time_constant(double tau);
+    void set_critically_damped_with_time_constant(double tau)
+    {
+        set_critically_damped_with_time_constant(tau, tau);
+    }
+    void set_critically_damped_with_time_constant(double tau_up, double tau_down);
 
 private:
     double sample_rate;
-    double spring_constant = 1, damping_constant = 1;
+    struct Constants {
+        double spring = 1, damping = 1;
+        void set_critically_damped_with_time_constant(double tau);
+    };
+    Constants up_constants, down_constants;
     double mass_position = 0, mass_velocity = 0;
 };

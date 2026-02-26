@@ -5,12 +5,18 @@ SpringLowPass::SpringLowPass(double sample_rate_arg)
 {
 }
 
-void SpringLowPass::set_critically_damped_with_time_constant(double tau)
+void SpringLowPass::Constants::set_critically_damped_with_time_constant(double tau)
 {
     // For mass=1: ω₀ = √k, critical damping ζ=1 requires c = 2√k.
     // Setting τ = 1/ω₀ gives k = 1/τ², c = 2/τ.
-    spring_constant = 1.0 / (tau * tau);
-    damping_constant = 2.0 / tau;
+    spring = 1.0 / (tau * tau);
+    damping = 2.0 / tau;
+}
+
+void SpringLowPass::set_critically_damped_with_time_constant(double tau_up, double tau_down)
+{
+    up_constants.set_critically_damped_with_time_constant(tau_up);
+    down_constants.set_critically_damped_with_time_constant(tau_down);
 }
 
 double SpringLowPass::process(double sample_in)
@@ -20,6 +26,10 @@ double SpringLowPass::process(double sample_in)
     // mass is fixed to 1.0
     // Derivatives: dy/dt = v,  dv/dt = k*(x - y) - c*v
     auto acc = [&](double y, double v) {
+        const bool need_to_go_up = sample_in > y;
+        // const bool going_up = v > 0;
+        const auto spring_constant = need_to_go_up ? up_constants.spring : down_constants.spring;
+        const auto damping_constant = need_to_go_up ? up_constants.damping : down_constants.damping;
         return spring_constant * (sample_in - y) - damping_constant * v;
     };
 
