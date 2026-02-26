@@ -10,6 +10,9 @@ enable_testing()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(TESTING_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/_o")
+file(MAKE_DIRECTORY ${TESTING_OUTPUT_DIR})
+
 add_subdirectory(_submodules/JUCE)
 
 find_package(GTest REQUIRED CONFIG)

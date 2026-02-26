@@ -19,11 +19,18 @@ cmake --build _b
 
 The _submodules subdir contains only external projects which should not be changed.
 
+Some non-tracked dirs:
+
+- _b for building
+- _d for dependencies (3rd party libs)
+- _o for test output
+
 ## Architecture
 
 Avoid MacOS-specific code whenever possible.
 
 ## CMake hints
+
 Set up the project for C++23.
 Prefer adding source files to targets via globbing. Collect and set up source files like this:
 
