@@ -100,7 +100,7 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     engine->setReleaseMs(raw_parameter_values.release_ms->load());
     engine->setMakeupGainDb(raw_parameter_values.makeup_gain_db->load());
 
-    engine->process(buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples());
+    engine->process_block(buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples());
 }
 
 juce::AudioProcessorEditor* SpringCompressorProcessor::createEditor()

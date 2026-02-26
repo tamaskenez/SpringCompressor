@@ -33,7 +33,7 @@ struct EngineImpl : public Engine {
     }
 
     // Feedforward peak compressor (Giannoulis et al. 2013, type 1).
-    void process(float* const* channelData, int numChannels, int numSamples) override
+    void process_block(float* const* channelData, int numChannels, int numSamples) override
     {
         const float makeupLinear = std::pow(10.0f, makeupGainDb / 20.0f);
 
