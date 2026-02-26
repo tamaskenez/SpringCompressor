@@ -2,6 +2,14 @@
 
 ## Build
 
+Some dependencies are provided by Conan. These needs to be built beforehand. The following script installs conan dependencies, Debug and Release, into the `_d` directory.
+
+```bash
+./1_build_conan.sh
+```
+
+Other dependencies are vendored from the _submodules directory. To configure and build the project:
+
 ```bash
 cmake -S . -B _b -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build _b
