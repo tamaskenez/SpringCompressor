@@ -2,6 +2,8 @@
 
 #include "PluginEditor.h"
 
+#include <cassert>
+
 SpringCompressorProcessor::SpringCompressorProcessor()
     : AudioProcessor(
         BusesProperties()
@@ -91,8 +93,7 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
-        buffer.clear(i, 0, buffer.getNumSamples());
+    assert(getTotalNumInputChannels() == getTotalNumOutputChannels());
 
     engine->setThresholdDb(raw_parameter_values.threshold_db->load());
     engine->setRatio(raw_parameter_values.ratio->load());
