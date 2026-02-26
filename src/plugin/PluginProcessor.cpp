@@ -10,6 +10,13 @@ SpringCompressorProcessor::SpringCompressorProcessor()
       )
     , apvts(*this, nullptr, "Parameters", createParameterLayout())
     , engine(make_engine())
+    , raw_parameter_values{
+        .threshold_db = apvts.getRawParameterValue("threshold"),
+        .ratio = apvts.getRawParameterValue("ratio"),
+        .attack_ms = apvts.getRawParameterValue("attack"),
+        .release_ms = apvts.getRawParameterValue("release"),
+        .makeup_gain_db = apvts.getRawParameterValue("makeup")
+      }
 {
 }
 
@@ -87,11 +94,11 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     for (auto i = getTotalNumInputChannels(); i < getTotalNumOutputChannels(); ++i)
         buffer.clear(i, 0, buffer.getNumSamples());
 
-    engine->setThresholdDb(apvts.getRawParameterValue("threshold")->load());
-    engine->setRatio(apvts.getRawParameterValue("ratio")->load());
-    engine->setAttackMs(apvts.getRawParameterValue("attack")->load());
-    engine->setReleaseMs(apvts.getRawParameterValue("release")->load());
-    engine->setMakeupGainDb(apvts.getRawParameterValue("makeup")->load());
+    engine->setThresholdDb(raw_parameter_values.threshold_db->load());
+    engine->setRatio(raw_parameter_values.ratio->load());
+    engine->setAttackMs(raw_parameter_values.attack_ms->load());
+    engine->setReleaseMs(raw_parameter_values.release_ms->load());
+    engine->setMakeupGainDb(raw_parameter_values.makeup_gain_db->load());
 
     engine->process(buffer.getArrayOfWritePointers(), buffer.getNumChannels(), buffer.getNumSamples());
 }
