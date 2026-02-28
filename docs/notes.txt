@@ -1,3 +1,5 @@
+# PAPERS
+
 Parameter Automation in a Dynamic Range
 Compressor
 https://joshreiss.github.io/documents/2013/Giannoulis%20Massberg%20Reiss%20-%20dynamic%20range%20compression%20automation%20-%20JAES%202013.pdf
@@ -6,12 +8,10 @@ https://joshreiss.github.io/documents/2013/Giannoulis%20Massberg%20Reiss%20-%20d
 AN OVERVIEW OF COMPRESSOR / LIMITERS AND THEIR GUTS
 https://www.tangible-technology.com/dynamics/comp_lim_ec_dh_pw2.html
 
-
 DYNAMIC RANGE COMPRESSION:
 OPERATION FUNDAMENTALS &
 REAL-TIME DIGITAL DESIGN
 https://ikee.lib.auth.gr/record/345494/files/Manasidis.pdf
-
 
 1176 simulation matlab simulink
 https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/projects/2016/White_Dick_paper.pdf
