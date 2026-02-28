@@ -17,6 +17,7 @@ struct EngineImpl : public Engine {
 
     float attack_ms = 10.0f;
     float release_ms = 100.0f;
+    float makeup_gain = 1.0f;
 
     void update_gain_filter_pars()
     {
@@ -52,9 +53,10 @@ struct EngineImpl : public Engine {
             auto* channel_buf = channel_data[ch_ix];
             auto& gf = gain_filters[ch_ix];
             for (int i = 0; i < num_samples; ++i) {
-                const auto smoothed_signal_power = static_cast<float>(gf.process(square(channel_buf[i])));
+                const auto smoothed_signal_power =
+                  std::max(0.0f, static_cast<float>(gf.process(square(channel_buf[i]))));
                 const auto gain = transfer_curve.gain_for_input_db(matlab::pow2db(smoothed_signal_power));
-                channel_buf[i] *= gain;
+                channel_buf[i] *= gain * makeup_gain;
 #ifndef NDEBUG
                 if (trace_block && ch_ix == 0) {
                     trace_block->emplace_back(Trace{smoothed_signal_power, gain});
@@ -72,9 +74,9 @@ struct EngineImpl : public Engine {
     {
         transfer_curve.set_ratio(r);
     }
-    void set_makeup_gain_db(float /*dB*/) override
+    void set_makeup_gain_db(float db) override
     {
-        // TODO: remove or implement.
+        makeup_gain = matlab::db2mag(db);
     }
     void set_attack_ms(float ms) override
     {

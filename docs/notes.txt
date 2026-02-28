@@ -11,3 +11,18 @@ DYNAMIC RANGE COMPRESSION:
 OPERATION FUNDAMENTALS &
 REAL-TIME DIGITAL DESIGN
 https://ikee.lib.auth.gr/record/345494/files/Manasidis.pdf
+
+
+1176 simulation matlab simulink
+https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/projects/2016/White_Dick_paper.pdf
+
+
+Experiment log:
+I checked the spectrum of amplitude modulating a sine with
+- 1 + sine
+- sqrt(1 + sine), that is, linear modulation of the power of signal
+- db2mag(1 + sine), that is, linear modulation of the dB level of the signal
+The first option has the cleanest spectrum, only 2 more peaks at ±df.
+The second is worse (2 extra peaks are same, but there's more left and right).
+Third is even worse.
+This experiment hints at that if we need the cleanest spectrum, the gain-reduction signal must be filtered as linear gain, not as dB.
