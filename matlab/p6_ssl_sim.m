@@ -3,6 +3,9 @@
 % The test and result signals must be in T and U.
 % fs is the sampling rate.
 
+% Result: Looks like the attack/release filtering is done on the GR signal in dB.
+% The SSL and UAD implementation agree more or less.
+
 opt_for = 5;
 
 switch opt_for
@@ -27,10 +30,19 @@ case 4
     threshold_db = -18.5;
     ratio = 6.5;
 case 5
-    attack_ms = 1.35;
-    release_ms = 50;
-    threshold_db = -18.9;
-    ratio = 5;
+    if 0
+        % SSL
+        attack_ms = 1.35;
+        release_ms = 50;
+        threshold_db = -18.9;
+        ratio = 5;
+    else
+        % UAD
+        attack_ms = 1.35;
+        release_ms = 50;
+        threshold_db = -25;
+        ratio = 3;
+    end
 otherwise
     attack_ms = 1.25;
     release_ms = 50;
