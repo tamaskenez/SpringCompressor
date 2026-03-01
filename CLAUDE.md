@@ -17,7 +17,7 @@ cmake --build _b
 
 ## Directory structure
 
-The _submodules subdir contains only external projects which should not be changed.
+The _submodules subdir contains mostly external projects which should not be changed, except for _submodules/meadow which is our own project and can be changed.
 
 Some non-tracked dirs:
 
