@@ -4,3 +4,5 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
 add_library(SelfModEngine STATIC ${sources})
 
 target_include_directories(SelfModEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(SelfModEngine PRIVATE meadow::meadow)

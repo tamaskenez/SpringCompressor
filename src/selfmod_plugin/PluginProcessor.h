@@ -59,11 +59,17 @@ public:
     }
     void changeProgramName(int, const juce::String&) override {}
 
-    void getStateInformation(juce::MemoryBlock&) override {}
-    void setStateInformation(const void*, int) override {}
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
+
+    juce::AudioProcessorValueTreeState apvts;
 
 private:
     std::unique_ptr<SelfModEngine> engine;
+    std::atomic<float>* lp_freq_param = nullptr;
+    std::atomic<float>* intensity_param = nullptr;
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SelfModProcessor)
 };
