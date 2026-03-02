@@ -12,8 +12,8 @@
 %   ts      - vector of the indices in x where the distribution will be calculated at
 %   nfft    - can be a single number, the size of the FFT.
 %             It can also be 2 numbers: [nfft m] where m specifies the number of FFT coefficients to be returned (1:m)
-%   timewin - the window used in the inner sum. The length must be odd.
-%   freqwin - the window used in the outer sum. The length must be odd and less or equal to nfft.
+%   timewin - time-smoothing window applied along time shifts. Controls time resolution. The length must be odd.
+%   freqwin - frequency-smoothing window applied along lags. Controls frequency resolution. The length must be odd and less or equal to nfft.
 %
 % OUTPUT:
 %   d - matrix of the computed distribution, rows are the frequency axis and columns is the time axis
@@ -32,11 +32,11 @@ x       = x(:);
 timewin = timewin(:);
 freqwin = freqwin(:);
 
-half_t = (length(timewin) - 1) / 2;
-half_f = (length(freqwin) - 1) / 2;
+half_lag  = (length(freqwin) - 1) / 2;  % freqwin applied along lags  → controls frequency resolution
+half_time = (length(timewin) - 1) / 2;  % timewin applied along time shifts → controls time resolution
 
 % Zero-pad x so that accesses near boundaries return zero.
-pad      = half_t + half_f;
+pad      = half_lag + half_time;
 x_padded = [zeros(pad, 1); x; zeros(pad, 1)];
 
 d = zeros(m_out, length(ts));
@@ -45,18 +45,17 @@ for t_idx = 1:length(ts)
     t = ts(t_idx);
     K = zeros(nfft, 1);
 
-    for m = -half_t:half_t
-        % Outer (time-smoothing) sum over shifts s.
-        inner = 0;
-        for s = -half_f:half_f
-            ip = t + s + m + pad;   % x_padded index for x(t+s+m)
-            im = t + s - m + pad;   % x_padded index for x(t+s-m)
-            inner = inner + freqwin(s + half_f + 1) * x_padded(ip) * conj(x_padded(im));
-        end
+    for m = -half_lag:half_lag
+        % Time-smoothing sum over shifts s, vectorised.
+        base_plus  = t + m + pad;
+        base_minus = t - m + pad;
+        seg_plus  = x_padded((base_plus  - half_time):(base_plus  + half_time));
+        seg_minus = x_padded((base_minus - half_time):(base_minus + half_time));
+        inner = sum(timewin .* seg_plus .* conj(seg_minus));
 
-        % Place the weighted sample into the FFT-ordered kernel.
+        % Place the lag-windowed sample into the FFT-ordered kernel.
         % Negative m values wrap to the end of the array (standard FFT layout).
-        K(mod(m, nfft) + 1) = K(mod(m, nfft) + 1) + timewin(m + half_t + 1) * inner;
+        K(mod(m, nfft) + 1) = K(mod(m, nfft) + 1) + freqwin(m + half_lag + 1) * inner;
     end
 
     col = fft(K);
