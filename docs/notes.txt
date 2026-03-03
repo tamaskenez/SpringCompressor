@@ -16,13 +16,42 @@ https://ikee.lib.auth.gr/record/345494/files/Manasidis.pdf
 1176 simulation matlab simulink
 https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/projects/2016/White_Dick_paper.pdf
 
+# VIDEOS
 
-Experiment log:
+The Art of Filter Design - Vadim Zavalishin
+https://www.youtube.com/watch?v=zPzCLqkQnr0
+
+
+# Experiment log:
+
 I checked the spectrum of amplitude modulating a sine with
 - 1 + sine
 - sqrt(1 + sine), that is, linear modulation of the power of signal
 - db2mag(1 + sine), that is, linear modulation of the dB level of the signal
+
 The first option has the cleanest spectrum, only 2 more peaks at ±df.
 The second is worse (2 extra peaks are same, but there's more left and right).
 Third is even worse.
 This experiment hints at that if we need the cleanest spectrum, the gain-reduction signal must be filtered as linear gain, not as dB.
+
+On the other hand, certain sources suggest that the usual and best sounding location to filter the GR signal is the dB domain.
+
+# Compressor dB transfer curve, soft knee formula
+
+The gradual, even increase of the ratio is exponential R * exp(d). The derivative on transitional region of the knee must increase in an exp(dx) manner.
+If the threshold is at x0, the linear region of the curve starts at x1 > x0, the transitional region is x0..x1, then the transitional curve f(x):
+
+f(x0) = x0
+f'(x0) = 1
+f'(x1) = 1/R
+
+f = A * exp(B * (x - x0)) + C
+
+which results in:
+
+w = x1 - x0;
+B = log(1/R) / (x1 - x0);
+A = 1 / B;
+C = x0 - A;
+
+This results in a most gradual transition from R = 1 to R.
