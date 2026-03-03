@@ -55,3 +55,41 @@ A = 1 / B;
 C = x0 - A;
 
 This results in a most gradual transition from R = 1 to R.
+
+## UNUSED CODE
+
+#if 0
+template<size_t D>
+class FixedPoint
+{
+public:
+    explicit FixedPoint(double f_arg)
+        : i(round(f_arg * pow(10.0, D)))
+    {
+    }
+    explicit FixedPoint(float f_arg)
+        : FixedPoint(ffcast<double>(f_arg))
+    {
+    }
+    [[nodiscard]] double get_double() const
+    {
+        return i / pow(10.0, D);
+    }
+    [[nodiscard]] float get_float() const
+    {
+        return ffcast<float>(get_double());
+    }
+    template<size_t YD>
+    bool operator==(const FixedPoint<M>& y) const
+    {
+        if constexpr (D >= YD) {
+            return i == y.i * iround<int64_t>(pow(10.0, D - YD));
+        } else {
+            return i * iround<int64_t>(pow(10.0, YD - D)) == y.i;
+        }
+    }
+
+private:
+    int64_t i = 0;
+};
+#endif

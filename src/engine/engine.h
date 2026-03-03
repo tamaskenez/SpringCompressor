@@ -1,9 +1,13 @@
 #pragma once
 
+#include "TransferCurve.h"
+
 #include <cmath>
 #include <memory>
 #include <span>
 #include <vector>
+
+struct TransferCurvePars;
 
 enum class GainControlApplication {
     on_squared_input,
@@ -21,15 +25,12 @@ public:
 
     virtual void prepare_to_play(double sampleRate, int maxBlockSize, int numChannels) = 0;
     // trace_block is for debugging, returns internal data for channel 0, only if !NDEBUG
-    virtual void
-    process_block(std::span<float* const> channel_data, int num_samples, std::vector<Trace>* trace_block = nullptr) = 0;
+    virtual void process_block(std::span<float* const> channel_data, int num_samples) = 0;
     virtual void release_resources() = 0;
 
-    virtual void set_threshold_db(float dB) = 0;
-    virtual void set_ratio(float ratio) = 0;
+    virtual std::optional<TransferCurveUpdateResult> set_transfer_curve(const TransferCurvePars& p) = 0;
     virtual void set_attack_ms(float ms) = 0;
     virtual void set_release_ms(float ms) = 0;
-    virtual void set_makeup_gain_db(float dB) = 0;
     virtual void set_gain_control_application(GainControlApplication application) = 0;
 };
 

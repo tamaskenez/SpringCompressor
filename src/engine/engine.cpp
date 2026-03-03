@@ -50,14 +50,9 @@ struct EngineImpl : public Engine {
         gain_filters.clear();
     }
 
-    void process_block(std::span<float* const> channel_data, int num_samples, std::vector<Trace>* trace_block) override
+    void process_block(std::span<float* const> channel_data, int num_samples) override
     {
         assert(channel_data.size() == gain_filters.size());
-#ifndef NDEBUG
-        if (trace_block) {
-            trace_block->clear();
-        }
-#endif
         for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
             auto* channel_buf = channel_data[ch_ix];
             auto& gf = gain_filters[ch_ix];
@@ -81,26 +76,13 @@ struct EngineImpl : public Engine {
                 } break;
                 }
                 channel_buf[i] = ffcast<float>(input_sample * gain * makeup_gain);
-#ifndef NDEBUG
-                if (trace_block && ch_ix == 0) {
-                    trace_block->emplace_back(Trace{NAN, gain});
-                }
-#endif
             }
         }
     }
 
-    void set_threshold_db(float dB) override
+    std::optional<TransferCurveUpdateResult> set_transfer_curve(const TransferCurvePars& p) override
     {
-        transfer_curve.set_threshold_db(dB);
-    }
-    void set_ratio(float r) override
-    {
-        transfer_curve.set_ratio(r);
-    }
-    void set_makeup_gain_db(float db) override
-    {
-        makeup_gain = matlab::db2mag(db);
+        return transfer_curve.set(p);
     }
     void set_attack_ms(float ms) override
     {

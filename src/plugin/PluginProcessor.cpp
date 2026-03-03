@@ -109,11 +109,8 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     assert(getMainBusNumInputChannels() == getTotalNumInputChannels());
     assert(getMainBusNumOutputChannels() == getTotalNumOutputChannels());
 
-    engine->set_threshold_db(raw_parameter_values.threshold_db->load());
-    engine->set_ratio(raw_parameter_values.ratio->load());
     engine->set_attack_ms(raw_parameter_values.attack_ms->load());
     engine->set_release_ms(raw_parameter_values.release_ms->load());
-    engine->set_makeup_gain_db(raw_parameter_values.makeup_gain_db->load());
     engine->set_gain_control_application(
       static_cast<GainControlApplication>(static_cast<int>(raw_parameter_values.gain_control_application->load()))
     );
