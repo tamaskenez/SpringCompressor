@@ -5,6 +5,12 @@
 #include <span>
 #include <vector>
 
+enum class GainControlApplication {
+    on_squared_input,
+    on_gr_db,
+    on_gr_mag
+};
+
 class Engine
 {
 public:
@@ -24,6 +30,7 @@ public:
     virtual void set_attack_ms(float ms) = 0;
     virtual void set_release_ms(float ms) = 0;
     virtual void set_makeup_gain_db(float dB) = 0;
+    virtual void set_gain_control_application(GainControlApplication application) = 0;
 };
 
 std::unique_ptr<Engine> make_engine();

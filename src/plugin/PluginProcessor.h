@@ -74,7 +74,7 @@ private:
     std::unique_ptr<Engine> engine;
     struct RawParameterValues {
         using float_pointer = std::atomic<float>*;
-        float_pointer threshold_db, ratio, attack_ms, release_ms, makeup_gain_db;
+        float_pointer threshold_db, ratio, attack_ms, release_ms, makeup_gain_db, gain_control_application;
     } raw_parameter_values;
 
     juce::String program0_name = "program#0";

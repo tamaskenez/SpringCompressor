@@ -18,14 +18,23 @@ struct EngineImpl : public Engine {
     float attack_ms = 10.0f;
     float release_ms = 100.0f;
     float makeup_gain = 1.0f;
+    GainControlApplication gain_control_application = GainControlApplication::on_gr_db;
 
     void update_gain_filter_pars()
     {
         // Note: this might be called on audio thread.
         for (auto& f : gain_filters) {
             f.set_critically_damped_with_time_constant(attack_ms / 1000, release_ms / 1000);
+            switch (gain_control_application) {
+            case GainControlApplication::on_squared_input:
+            case GainControlApplication::on_gr_db:
+                f.set_state(0.0, 0.0);
+            case GainControlApplication::on_gr_mag:
+                f.set_state(1.0, 0.0);
+            }
         }
     }
+
     void prepare_to_play(double sr, int /*maxBlockSize*/, int num_channels) override
     {
         sample_rate = sr;
@@ -53,13 +62,28 @@ struct EngineImpl : public Engine {
             auto* channel_buf = channel_data[ch_ix];
             auto& gf = gain_filters[ch_ix];
             for (int i = 0; i < num_samples; ++i) {
-                const auto smoothed_signal_power =
-                  std::max(0.0f, static_cast<float>(gf.process(square(channel_buf[i]))));
-                const auto gain = transfer_curve.gain_for_input_db(matlab::pow2db(smoothed_signal_power));
-                channel_buf[i] *= gain * makeup_gain;
+                const double input_sample = channel_buf[i];
+                double gain = NAN;
+                switch (gain_control_application) {
+                case GainControlApplication::on_squared_input: {
+                    const auto smoothed_signal_power = gf.process(square(input_sample));
+                    gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::pow2db(smoothed_signal_power)));
+                } break;
+                case GainControlApplication::on_gr_db: {
+                    const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
+                    const auto smoothed_gain_db = gf.process(gain_db);
+                    gain = matlab::db2mag(smoothed_gain_db);
+                } break;
+                case GainControlApplication::on_gr_mag: {
+                    const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
+                    const auto smoothed_gain = gf.process(matlab::db2mag(gain_db));
+                    gain = std::max(0.0, smoothed_gain);
+                } break;
+                }
+                channel_buf[i] = ffcast<float>(input_sample * gain * makeup_gain);
 #ifndef NDEBUG
                 if (trace_block && ch_ix == 0) {
-                    trace_block->emplace_back(Trace{smoothed_signal_power, gain});
+                    trace_block->emplace_back(Trace{NAN, gain});
                 }
 #endif
             }
@@ -87,6 +111,13 @@ struct EngineImpl : public Engine {
     {
         release_ms = ms;
         update_gain_filter_pars();
+    }
+    void set_gain_control_application(GainControlApplication application) override
+    {
+        if (gain_control_application != application) {
+            gain_control_application = application;
+            update_gain_filter_pars();
+        }
     }
 };
 

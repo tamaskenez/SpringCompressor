@@ -26,7 +26,18 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     setupSlider(releaseSlider, releaseLabel, "Release");
     setupSlider(makeupSlider, makeupLabel, "Makeup");
 
-    setSize(500, 220);
+    auto* gain_filter_param = dynamic_cast<juce::AudioParameterChoice*>(p.apvts.getParameter("gain_filter"));
+    for (int i = 0; i < gain_filter_param->choices.size(); ++i)
+        gainFilterComboBox.addItem(gain_filter_param->choices[i], i + 1);
+    gainFilterAttachment = std::make_unique<ComboBoxAttachment>(p.apvts, "gain_filter", gainFilterComboBox);
+
+    gainFilterLabel.setText("Gain filter", juce::dontSendNotification);
+    gainFilterLabel.setJustificationType(juce::Justification::centred);
+    gainFilterLabel.attachToComponent(&gainFilterComboBox, false);
+    addAndMakeVisible(gainFilterComboBox);
+    addAndMakeVisible(gainFilterLabel);
+
+    setSize(600, 220);
 }
 
 void SpringCompressorEditor::paint(juce::Graphics& g)
@@ -37,8 +48,11 @@ void SpringCompressorEditor::paint(juce::Graphics& g)
 void SpringCompressorEditor::resized()
 {
     auto area = getLocalBounds().reduced(10).withTrimmedTop(24);
-    const int sliderWidth = area.getWidth() / 5;
+    const int sliderWidth = area.getWidth() / 6;
 
     for (auto* slider : {&thresholdSlider, &ratioSlider, &attackSlider, &releaseSlider, &makeupSlider})
         slider->setBounds(area.removeFromLeft(sliderWidth));
+
+    auto col = area.removeFromLeft(sliderWidth);
+    gainFilterComboBox.setBounds(col.withSizeKeepingCentre(sliderWidth - 4, 24));
 }

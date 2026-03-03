@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 
 #include "PluginEditor.h"
+#include "engine.h"
 
 #include <cassert>
 #include <ranges>
@@ -19,7 +20,8 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .ratio = apvts.getRawParameterValue("ratio"),
         .attack_ms = apvts.getRawParameterValue("attack"),
         .release_ms = apvts.getRawParameterValue("release"),
-        .makeup_gain_db = apvts.getRawParameterValue("makeup")
+        .makeup_gain_db = apvts.getRawParameterValue("makeup"),
+        .gain_control_application = apvts.getRawParameterValue("gain_filter")
       }
 {
 }
@@ -78,6 +80,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
       )
     );
 
+    params.push_back(
+      std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"gain_filter", 1}, "Gain filter", juce::StringArray{"Input", "GR dB", "Linear GR"}, 1
+      )
+    );
+
     return {params.begin(), params.end()};
 }
 
@@ -106,6 +114,9 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     engine->set_attack_ms(raw_parameter_values.attack_ms->load());
     engine->set_release_ms(raw_parameter_values.release_ms->load());
     engine->set_makeup_gain_db(raw_parameter_values.makeup_gain_db->load());
+    engine->set_gain_control_application(
+      static_cast<GainControlApplication>(static_cast<int>(raw_parameter_values.gain_control_application->load()))
+    );
 
     auto input_buffer = getBusBuffer(buffer, true, 0);
     auto output_buffer = getBusBuffer(buffer, false, 0);

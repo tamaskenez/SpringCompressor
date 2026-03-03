@@ -19,8 +19,14 @@ private:
     juce::Slider thresholdSlider, ratioSlider, attackSlider, releaseSlider, makeupSlider;
     juce::Label thresholdLabel, ratioLabel, attackLabel, releaseLabel, makeupLabel;
 
+    juce::ComboBox gainFilterComboBox;
+    juce::Label gainFilterLabel;
+
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     SliderAttachment thresholdAttachment, ratioAttachment, attackAttachment, releaseAttachment, makeupAttachment;
+
+    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    std::unique_ptr<ComboBoxAttachment> gainFilterAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorEditor)
 };
