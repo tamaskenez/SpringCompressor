@@ -16,23 +16,7 @@ find_package(magic_enum REQUIRED CONFIG)
 set(TESTING_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/_o")
 file(MAKE_DIRECTORY ${TESTING_OUTPUT_DIR})
 
-add_subdirectory(_submodules/JUCE)
-
-# Mark all JUCE targets as SYSTEM so their headers don't trigger project warnings.
-function(mark_juce_as_system dir)
-    get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
-    foreach(subdir IN LISTS subdirs)
-        mark_juce_as_system("${subdir}")
-    endforeach()
-    get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
-    foreach(target IN LISTS targets)
-        get_target_property(_aliased "${target}" ALIASED_TARGET)
-        if(NOT _aliased)
-            set_target_properties("${target}" PROPERTIES SYSTEM TRUE)
-        endif()
-    endforeach()
-endfunction()
-mark_juce_as_system("${CMAKE_CURRENT_SOURCE_DIR}/_submodules/JUCE")
+add_subdirectory(_submodules/JUCE SYSTEM)
 
 include(clang_warnings.cmake)
 
