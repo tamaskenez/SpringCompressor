@@ -16,14 +16,15 @@ public:
 private:
     SpringCompressorProcessor& processorRef;
 
-    juce::Slider thresholdSlider, ratioSlider, attackSlider, releaseSlider, makeupSlider;
-    juce::Label thresholdLabel, ratioLabel, attackLabel, releaseLabel, makeupLabel;
+    juce::Slider thresholdSlider, ratioSlider, attackSlider, releaseSlider, makeupSlider, kneeWidthSlider;
+    juce::Label thresholdLabel, ratioLabel, attackLabel, releaseLabel, makeupLabel, kneeWidthLabel;
 
     juce::ComboBox gainFilterComboBox;
     juce::Label gainFilterLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    SliderAttachment thresholdAttachment, ratioAttachment, attackAttachment, releaseAttachment, makeupAttachment;
+    SliderAttachment thresholdAttachment, ratioAttachment, attackAttachment, releaseAttachment, makeupAttachment,
+      kneeWidthAttachment;
 
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     std::unique_ptr<ComboBoxAttachment> gainFilterAttachment;

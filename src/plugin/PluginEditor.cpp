@@ -8,6 +8,7 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     , attackAttachment(p.apvts, "attack", attackSlider)
     , releaseAttachment(p.apvts, "release", releaseSlider)
     , makeupAttachment(p.apvts, "makeup", makeupSlider)
+    , kneeWidthAttachment(p.apvts, "knee_width", kneeWidthSlider)
 {
     auto setupSlider = [this](juce::Slider& slider, juce::Label& label, const juce::String& text) {
         slider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
@@ -25,6 +26,7 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     setupSlider(attackSlider, attackLabel, "Attack");
     setupSlider(releaseSlider, releaseLabel, "Release");
     setupSlider(makeupSlider, makeupLabel, "Makeup");
+    setupSlider(kneeWidthSlider, kneeWidthLabel, "Knee width");
 
     auto* gain_filter_param = dynamic_cast<juce::AudioParameterChoice*>(p.apvts.getParameter("gain_filter"));
     for (int i = 0; i < gain_filter_param->choices.size(); ++i)
@@ -37,7 +39,7 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     addAndMakeVisible(gainFilterComboBox);
     addAndMakeVisible(gainFilterLabel);
 
-    setSize(600, 220);
+    setSize(700, 220);
 }
 
 void SpringCompressorEditor::paint(juce::Graphics& g)
@@ -48,9 +50,10 @@ void SpringCompressorEditor::paint(juce::Graphics& g)
 void SpringCompressorEditor::resized()
 {
     auto area = getLocalBounds().reduced(10).withTrimmedTop(24);
-    const int sliderWidth = area.getWidth() / 6;
+    const int sliderWidth = area.getWidth() / 7;
 
-    for (auto* slider : {&thresholdSlider, &ratioSlider, &attackSlider, &releaseSlider, &makeupSlider})
+    for (auto* slider :
+         {&thresholdSlider, &ratioSlider, &attackSlider, &releaseSlider, &makeupSlider, &kneeWidthSlider})
         slider->setBounds(area.removeFromLeft(sliderWidth));
 
     auto col = area.removeFromLeft(sliderWidth);

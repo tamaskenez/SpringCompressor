@@ -21,6 +21,7 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .attack_ms = apvts.getRawParameterValue("attack"),
         .release_ms = apvts.getRawParameterValue("release"),
         .makeup_gain_db = apvts.getRawParameterValue("makeup"),
+        .knee_width_db = apvts.getRawParameterValue("knee_width"),
         .gain_control_application = apvts.getRawParameterValue("gain_filter")
       }
 {
@@ -81,6 +82,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
     );
 
     params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"knee_width", 1},
+        "Knee width",
+        juce::NormalisableRange<float>(0.0f, 40.0f, 0.1f),
+        0.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("dB")
+      )
+    );
+
+    params.push_back(
       std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"gain_filter", 1}, "Gain filter", juce::StringArray{"Input", "GR dB", "Linear GR"}, 1
       )
@@ -109,6 +120,15 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     assert(getMainBusNumInputChannels() == getTotalNumInputChannels());
     assert(getMainBusNumOutputChannels() == getTotalNumOutputChannels());
 
+    engine->set_transfer_curve(
+      TransferCurvePars{
+        .threshold_db = raw_parameter_values.threshold_db->load(),
+        .ratio = raw_parameter_values.ratio->load(),
+        .knee_width_db = raw_parameter_values.knee_width_db->load(),
+        .normalizer = TransferCurveNormalizer::makeup_gain,
+        .normalizer_db = raw_parameter_values.makeup_gain_db->load(),
+      }
+    );
     engine->set_attack_ms(raw_parameter_values.attack_ms->load());
     engine->set_release_ms(raw_parameter_values.release_ms->load());
     engine->set_gain_control_application(
