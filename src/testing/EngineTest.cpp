@@ -26,8 +26,9 @@ TEST(Engine, save_sine_compression)
 
     std::vector<float> input(num_samples);
     double A = 1.0;
-    for (int i = 0; i < num_samples; ++i) {
-        input[i] = static_cast<float>(A * std::sin(2.0 * std::numbers::pi * freq * i / sample_rate));
+    for (size_t i = 0; i < static_cast<size_t>(num_samples); ++i) {
+        input[i] =
+          static_cast<float>(A * std::sin(2.0 * std::numbers::pi * freq * static_cast<double>(i) / sample_rate));
         if (i >= 200) {
             if (i < 800) {
                 A *= 0.999;
@@ -45,8 +46,8 @@ TEST(Engine, save_sine_compression)
     std::ofstream file(TESTING_OUTPUT_DIR "/Engine_sine_compression.txt");
     ASSERT_TRUE(file.is_open());
 
-    ASSERT_TRUE(trace_block.size() == num_samples);
-    for (int i = 0; i < num_samples; ++i) {
+    ASSERT_TRUE(trace_block.size() == static_cast<size_t>(num_samples));
+    for (size_t i = 0; i < static_cast<size_t>(num_samples); ++i) {
         const auto& ti = trace_block[i];
         file << std::format("{} {} {}\n", input[i], output[i], ti.gain);
     }

@@ -45,7 +45,7 @@ struct SelfModEngineImpl : public SelfModEngine {
     {
         sample_rate = sample_rate_arg;
         update_filters();
-        channel_states.assign(num_channels, {});
+        channel_states.assign(static_cast<size_t>(num_channels), {});
     }
 
     void process_block(std::span<float* const> channel_data, int num_samples) override

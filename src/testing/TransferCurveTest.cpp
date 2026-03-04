@@ -34,7 +34,7 @@ TEST(TransferCurve, T1)
             tc.set(tcp);
             break;
         }
-        for (float i = tcp.threshold_db - 10; i <= 0; ++i) {
+        for (double i = tcp.threshold_db - 10; i <= 0; ++i) {
             switch (k) {
             case 0:
                 std::print("{} ", i);
@@ -53,7 +53,7 @@ TEST(TransferCurve, T1)
     std::println("]';");
     std::println("Slowly raising makeup gain");
     std::println("|makeupgain|reference_level|out@ref");
-    for (float mg = -5; mg <= 5; mg += 0.1) {
+    for (float mg = -5; mg <= 5; mg += 0.1f) {
         mg = round(mg * 10) / 10;
         tcp.normalizer_db = mg;
         auto r = tc.set(tcp);
