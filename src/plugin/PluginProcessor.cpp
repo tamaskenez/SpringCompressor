@@ -3,6 +3,9 @@
 #include "PluginEditor.h"
 #include "engine.h"
 
+#include <magic_enum/magic_enum.hpp>
+#include <meadow/cppext.h>
+
 #include <cassert>
 #include <ranges>
 #include <span>
@@ -131,13 +134,18 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     );
     engine->set_attack_ms(raw_parameter_values.attack_ms->load());
     engine->set_release_ms(raw_parameter_values.release_ms->load());
-    engine->set_gain_control_application(
-      static_cast<GainControlApplication>(static_cast<int>(raw_parameter_values.gain_control_application->load()))
-    );
+
+    {
+        const auto e = magic_enum::enum_cast<GainControlApplication>(
+          iround<int>(raw_parameter_values.gain_control_application->load())
+        );
+        assert(e);
+        engine->set_gain_control_application(e.value_or(GainControlApplication::on_gr_db));
+    }
 
     auto input_buffer = getBusBuffer(buffer, true, 0);
     auto output_buffer = getBusBuffer(buffer, false, 0);
-    auto num_channels = static_cast<size_t>(input_buffer.getNumChannels());
+    auto num_channels = sucast(input_buffer.getNumChannels());
     assert(std::cmp_equal(output_buffer.getNumChannels(), num_channels));
     // In practice, these will be the same pointers.
     auto read_pointers = std::span(input_buffer.getArrayOfReadPointers(), num_channels);

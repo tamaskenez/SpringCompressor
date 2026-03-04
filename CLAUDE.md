@@ -25,9 +25,29 @@ Some non-tracked dirs:
 - _d for dependencies (3rd party libs)
 - _o for test output
 
-## Architecture
+## C++ Guidelines
 
-Avoid MacOS-specific code whenever possible.
+Avoid platform-specific code whenever possible.
+
+The project has many C++ warnings enabled as errors (see clang_warnings.cmake) including
+numeric conversion warnings. To silence the numeric conversion warnings, instead of
+`static_cast` use the following custom functions (defined in <meadow/cppext.h>):
+
+### Sign conversion
+
+Use sucast() and uscast() to convert between unsigned and signed types of the same size.
+
+### Integer -> integer
+
+Use iicast<target-integer-type>() to narrow.
+
+### float -> integer
+
+Use iround<integer-type>, ifloor<integer-type> or iceil<integer-type>.
+
+### float -> double
+
+Use ffcast<float> to cast from double to float.
 
 ## CMake hints
 
