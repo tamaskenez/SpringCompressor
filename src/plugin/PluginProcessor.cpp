@@ -10,6 +10,11 @@
 #include <ranges>
 #include <span>
 
+namespace
+{
+constexpr int k_ui_refresh_timer_ms = 33;
+}
+
 SpringCompressorProcessor::SpringCompressorProcessor()
     : AudioProcessor(
         BusesProperties()
@@ -27,11 +32,13 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .reference_level_db = apvts.getRawParameterValue("reference_level"),
         .knee_width_db = apvts.getRawParameterValue("knee_width"),
         .gain_control_application = apvts.getRawParameterValue("gain_filter")
-      }
+      },
+ui_refresh_timer([this](){on_ui_refresh_timer_elapsed();})
 {
     for (auto* id :
          {"threshold", "ratio", "attack", "release", "makeup", "reference_level", "knee_width", "gain_filter"})
         apvts.addParameterListener(id, this);
+    ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::createParameterLayout()
@@ -143,22 +150,42 @@ const std::vector<juce::String> k_transfer_curve_parameters = {
 };
 }
 
+void SpringCompressorProcessor::update_ui_with_transfer_curve_update_result(const TransferCurveUpdateResult& tcur)
+{
+    juce::RangedAudioParameter* p;
+    switch (tcur.normalizer) {
+    case TransferCurveNormalizer::makeup_gain:
+        p = apvts.getParameter("makeup");
+        break;
+    case TransferCurveNormalizer::reference_level:
+        p = apvts.getParameter("reference_level");
+        break;
+    }
+    ignore_parameter_changed = true;
+    if (p->getNormalisableRange().getRange().contains(tcur.normalizer_db)) {
+        p->setValueNotifyingHost(tcur.normalizer_db);
+    } else if (std::isnan(tcur.normalizer_db)) {
+        p->setValueNotifyingHost(p->getNormalisableRange().start);
+    } else {
+        p->setValueNotifyingHost(
+          std::clamp(tcur.normalizer_db, p->getNormalisableRange().start, p->getNormalisableRange().end)
+        );
+    }
+    ignore_parameter_changed = false;
+}
+
 void SpringCompressorProcessor::engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp)
 {
     if (auto tcur = engine->set_transfer_curve(tcp)) {
-        switch (tcur->normalizer) {
-        case TransferCurveNormalizer::makeup_gain:
-            apvts.getParameter("makeup")->setValueNotifyingHost(tcur->normalizer_db);
-            break;
-        case TransferCurveNormalizer::reference_level:
-            apvts.getParameter("reference_level")->setValueNotifyingHost(tcur->normalizer_db);
-            break;
-        }
+        update_ui_with_transfer_curve_update_result(*tcur);
     }
 }
 
 void SpringCompressorProcessor::parameterChanged(const juce::String& name, float f)
 {
+    if (ignore_parameter_changed) {
+        return;
+    }
     if (std::ranges::find(k_transfer_curve_parameters, name) == k_transfer_curve_parameters.end()) {
         // The engine never changes non-transfer curve parameters, they don't need special handling. They will be read
         // in processBlock directly.
@@ -255,6 +282,18 @@ void SpringCompressorProcessor::setStateInformation(const void* data, int sizeIn
     std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
     if (xmlState && xmlState->hasTagName(apvts.state.getType()))
         apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+}
+
+void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
+{
+    std::any msg;
+    while (audio_to_ui_queue.try_dequeue(msg)) {
+        if (auto* tcur = std::any_cast<TransferCurveUpdateResult>(&msg)) {
+            update_ui_with_transfer_curve_update_result(*tcur);
+        } else {
+            assert(false);
+        }
+    }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

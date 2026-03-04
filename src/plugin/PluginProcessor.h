@@ -1,5 +1,6 @@
 #pragma once
 
+#include "JuceTimer.h"
 #include "engine.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -89,9 +90,14 @@ private:
     moodycamel::ReaderWriterQueue<std::any> audio_to_ui_queue;
     bool audio_thread_running = false;
     juce::String program0_name = "program#0";
+    bool ignore_parameter_changed = false;
+
+    JuceTimer ui_refresh_timer;
 
     void parameterChanged(const juce::String&, float) override;
+    void update_ui_with_transfer_curve_update_result(const TransferCurveUpdateResult& tcur);
     void engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp);
+    void on_ui_refresh_timer_elapsed();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorProcessor)
 };
