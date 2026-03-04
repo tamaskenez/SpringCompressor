@@ -4,6 +4,28 @@
 
 #include <cassert>
 
+bool TransferCurvePars::sanitize()
+{
+    bool changed = false;
+    if (ratio < 1) {
+        ratio = 1;
+        changed = true;
+    }
+    if (knee_width_db < 0) {
+        knee_width_db = 0;
+        changed = true;
+    }
+    return changed;
+}
+
+bool TransferCurvePars::semantically_equals(const TransferCurvePars& y) const
+{
+    return threshold_db == y.threshold_db && std::max(1.0f, ratio) == std::max(1.0f, y.ratio)
+        && (ratio <= 1.0f ? 0.0f : std::max(0.0f, knee_width_db))
+             == (y.ratio <= 1.0f ? 0.0f : std::max(0.0f, y.knee_width_db))
+        && normalizer == y.normalizer && normalizer_db == y.normalizer_db;
+}
+
 TransferCurve::TransferCurve()
 {
     update();
@@ -11,16 +33,13 @@ TransferCurve::TransferCurve()
 
 std::optional<TransferCurveUpdateResult> TransferCurve::set(const TransferCurvePars& p)
 {
-    if (pars == p) {
+    if (pars.semantically_equals(p)) {
         return std::nullopt;
     }
     pars = p;
-    if (std::isnan(p.ratio) || p.ratio < 1) {
-        assert(false);
-        pars.ratio = 1;
-    }
-    if (std::isnan(p.knee_width_db) || p.knee_width_db < 0) {
-        assert(false);
+    bool sanitize_changed = pars.sanitize();
+    assert(!sanitize_changed);
+    if (pars.ratio == 1) {
         pars.knee_width_db = 0;
     }
     return update();
@@ -40,9 +59,6 @@ float TransferCurve::gain_db_for_input_db(float input_db) const
 
 TransferCurveUpdateResult TransferCurve::update()
 {
-    if (pars.ratio == 1) {
-        pars.knee_width_db = 0;
-    }
     if (pars.knee_width_db == 0) {
         knee_A = NAN;
         knee_B = NAN;
@@ -79,7 +95,7 @@ TransferCurveUpdateResult TransferCurve::update()
                     if (right - left < 1e-5) {
                         return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, ffcast<float>(m)};
                     }
-                    (gain_db_for_input_db(m) <= 0 ? right : left) = m;
+                    (gain_db_for_input_db(ffcast<float>(m)) <= 0 ? right : left) = m;
                 }
             } else {
                 // (input_db - threshold_db - knee_width_db) / ratio + output_db_right_of_knee - input_db + makeup_gain
@@ -93,7 +109,6 @@ TransferCurveUpdateResult TransferCurve::update()
                 };
             }
         }
-        break; // NOLINT(clang-analyzer-deadcode.DeadStores)
     case TransferCurveNormalizer::reference_level:
         makeup_gain_db = 0;
         makeup_gain_db = -gain_db_for_input_db(pars.normalizer_db);

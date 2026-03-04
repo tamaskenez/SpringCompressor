@@ -18,7 +18,8 @@ struct TransferCurvePars {
       TransferCurveNormalizer::makeup_gain; // Tells what the `normalizer_db` field means.
     float normalizer_db = 0;
 
-    bool operator==(const TransferCurvePars&) const = default;
+    bool semantically_equals(const TransferCurvePars&) const;
+    bool sanitize();
 };
 
 struct TransferCurveUpdateResult {
