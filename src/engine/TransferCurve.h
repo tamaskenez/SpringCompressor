@@ -42,7 +42,7 @@ public:
     // If the reference level was specified in pars, return the corresponding, computed makeup gain.
     std::optional<TransferCurveUpdateResult> set(const TransferCurvePars& pars);
 
-    [[nodiscard]] float gain_db_for_input_db(float input_db) const;
+    [[nodiscard]] double gain_db_for_input_db(double input_db) const;
 
 private:
     TransferCurvePars pars;

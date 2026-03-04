@@ -38,8 +38,10 @@ struct EngineImpl : public Engine {
             case GainControlApplication::on_squared_input:
             case GainControlApplication::on_gr_db:
                 chs.gain_filter.set_state(0.0, 0.0);
+                break;
             case GainControlApplication::on_gr_mag:
                 chs.gain_filter.set_state(1.0, 0.0);
+                break;
             }
         }
     }
@@ -47,7 +49,7 @@ struct EngineImpl : public Engine {
     void prepare_to_play(double sr, int /*maxBlockSize*/, int num_channels) override
     {
         sample_rate = sr;
-        channel_states.assign(num_channels, ChannelState(sample_rate));
+        channel_states.assign(sucast(num_channels), ChannelState(sample_rate));
         for (auto& chs : channel_states) {
             chs.gain_filter.set_state(0.0, 0.0);
         }

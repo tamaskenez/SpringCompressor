@@ -44,7 +44,7 @@ std::optional<TransferCurveUpdateResult> TransferCurve::set(const TransferCurveP
     }
     return update();
 }
-float TransferCurve::gain_db_for_input_db(float input_db) const
+double TransferCurve::gain_db_for_input_db(double input_db) const
 {
     double result = 0;
     if (input_db <= pars.threshold_db) {
@@ -54,7 +54,7 @@ float TransferCurve::gain_db_for_input_db(float input_db) const
     } else {
         result = (input_db - pars.threshold_db - pars.knee_width_db) / pars.ratio + output_db_right_of_knee - input_db;
     }
-    return ffcast<float>(result + makeup_gain_db);
+    return result + makeup_gain_db;
 }
 
 TransferCurveUpdateResult TransferCurve::update()
@@ -95,7 +95,7 @@ TransferCurveUpdateResult TransferCurve::update()
                     if (right - left < 1e-5) {
                         return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, ffcast<float>(m)};
                     }
-                    (gain_db_for_input_db(ffcast<float>(m)) <= 0 ? right : left) = m;
+                    (gain_db_for_input_db(m) <= 0 ? right : left) = m;
                 }
             } else {
                 // (input_db - threshold_db - knee_width_db) / ratio + output_db_right_of_knee - input_db + makeup_gain
