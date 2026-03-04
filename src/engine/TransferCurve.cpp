@@ -11,8 +11,9 @@ bool TransferCurvePars::sanitize()
         ratio = 1;
         changed = true;
     }
-    if (knee_width_db < 0) {
-        knee_width_db = 0;
+    auto original_knee_width_db = knee_width_db;
+    knee_width_db = std::clamp<float>(knee_width_db, 0, k_max_knee_width_db);
+    if (abs(knee_width_db - original_knee_width_db) > 1e-3) {
         changed = true;
     }
     return changed;
@@ -57,6 +58,24 @@ double TransferCurve::gain_db_for_input_db(double input_db) const
     return result + makeup_gain_db;
 }
 
+TransferCurveUpdateResult TransferCurve::make_TransferCurveUpdateResult(TransferCurveNormalizer n, float ndb)
+{
+    std::inplace_vector<float, k_max_knee_width_db> knee_ys;
+
+    for (int x = ifloor<int>(pars.threshold_db) + 1; ifcast<float>(x) - pars.threshold_db < pars.knee_width_db; ++x) {
+        knee_ys.push_back(ffcast<float>(x + gain_db_for_input_db(x)));
+    }
+
+    return TransferCurveUpdateResult{
+      .normalizer = n,
+      .normalizer_db = ndb,
+      .threshold = AF2{pars.threshold_db,                      ffcast<float>(pars.threshold_db + makeup_gain_db)},
+      .knee_ys = knee_ys,
+      .knee_right = AF2{pars.threshold_db + pars.knee_width_db, ffcast<float>(output_db_right_of_knee)           },
+      .oo_ratio = 1 / pars.ratio
+    };
+}
+
 TransferCurveUpdateResult TransferCurve::update()
 {
     if (pars.knee_width_db == 0) {
@@ -74,15 +93,15 @@ TransferCurveUpdateResult TransferCurve::update()
         // Calculate reference_level.
         if (makeup_gain_db < 0) {
             // No reference level, output is always less.
-            return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, NAN};
+            return make_TransferCurveUpdateResult(TransferCurveNormalizer::reference_level, NAN);
         } else if (makeup_gain_db == 0) {
             // No reference level, output is equal to input at least up to threshold.
-            return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, -INFINITY};
+            return make_TransferCurveUpdateResult(TransferCurveNormalizer::reference_level, -INFINITY);
         } else {
             // makeup_gain_db > 0
             if (pars.ratio == 1) {
                 // Output is always greater.
-                return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, NAN};
+                return make_TransferCurveUpdateResult(TransferCurveNormalizer::reference_level, NAN);
             }
             auto gain_db_right_of_knee = gain_db_for_input_db(pars.threshold_db + pars.knee_width_db);
             if (gain_db_right_of_knee <= 0) {
@@ -93,20 +112,22 @@ TransferCurveUpdateResult TransferCurve::update()
                 for (;;) {
                     const auto m = (left + right) / 2;
                     if (right - left < 1e-5) {
-                        return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, ffcast<float>(m)};
+                        return make_TransferCurveUpdateResult(
+                          TransferCurveNormalizer::reference_level, ffcast<float>(m)
+                        );
                     }
                     (gain_db_for_input_db(m) <= 0 ? right : left) = m;
                 }
             } else {
                 // (input_db - threshold_db - knee_width_db) / ratio + output_db_right_of_knee - input_db + makeup_gain
                 // = 0
-                return TransferCurveUpdateResult{
+                return make_TransferCurveUpdateResult(
                   TransferCurveNormalizer::reference_level,
                   ffcast<float>(
                     ((output_db_right_of_knee + makeup_gain_db) * pars.ratio - pars.threshold_db - pars.knee_width_db)
                     / (pars.ratio - 1)
                   )
-                };
+                );
             }
         }
     case TransferCurveNormalizer::reference_level:
@@ -114,6 +135,6 @@ TransferCurveUpdateResult TransferCurve::update()
         makeup_gain_db = -gain_db_for_input_db(pars.normalizer_db);
         assert(makeup_gain_db >= 0);
         makeup_gain_db = std::max(0.0, makeup_gain_db);
-        return TransferCurveUpdateResult{TransferCurveNormalizer::makeup_gain, ffcast<float>(makeup_gain_db)};
+        return make_TransferCurveUpdateResult(TransferCurveNormalizer::makeup_gain, ffcast<float>(makeup_gain_db));
     }
 }

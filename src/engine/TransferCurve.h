@@ -1,5 +1,9 @@
 #pragma once
 
+#include "meadow/array.h"
+#include "meadow/cppext.h"
+#include "meadow/inplace_vector.h"
+
 #include <cmath>
 #include <optional>
 
@@ -22,9 +26,20 @@ struct TransferCurvePars {
     bool sanitize();
 };
 
+const int k_max_knee_width_db = 40;
+
 struct TransferCurveUpdateResult {
     TransferCurveNormalizer normalizer;
     float normalizer_db;
+
+    // Describe the transfer curve:
+    AF2 threshold; // dy/dx = 1 diagonal line until (threshold[0], threshold[1])
+    // The knee is a curve, described by y coordinates for integer x coordinates.
+    // The first point is (ceil(threshold[0]), knee_ys[0]),
+    // then (ceil(threshold[0] + 1), knee_ys[1]), ..., etc...
+    std::inplace_vector<float, k_max_knee_width_db> knee_ys;
+    AF2 knee_right; // A line starts at (knee_right[0], knee_right[1])
+    float oo_ratio; // with dy/dx = oo_ratio
 };
 
 // Transfer curve of dynamic compressor which maps input levels to output levels.
@@ -43,6 +58,8 @@ public:
     std::optional<TransferCurveUpdateResult> set(const TransferCurvePars& pars);
 
     [[nodiscard]] double gain_db_for_input_db(double input_db) const;
+
+    TransferCurveUpdateResult make_TransferCurveUpdateResult(TransferCurveNormalizer n, float db);
 
 private:
     TransferCurvePars pars;
