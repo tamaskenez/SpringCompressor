@@ -26,6 +26,7 @@ public:
     virtual void prepare_to_play(double sampleRate, int maxBlockSize, int numChannels) = 0;
     // trace_block is for debugging, returns internal data for channel 0, only if !NDEBUG
     virtual void process_block(std::span<float* const> channel_data, int num_samples) = 0;
+    virtual std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) = 0;
     virtual void release_resources() = 0;
 
     virtual std::optional<TransferCurveUpdateResult> set_transfer_curve(const TransferCurvePars& p) = 0;

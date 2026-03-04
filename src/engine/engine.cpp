@@ -9,10 +9,19 @@
 #include <cassert>
 #include <vector>
 
+struct ChannelState {
+    explicit ChannelState(double sample_rate)
+        : gain_filter(sample_rate)
+    {
+    }
+    SpringLowPass gain_filter;
+    double gain = NAN;
+};
+
 struct EngineImpl : public Engine {
     double sample_rate = 44100.0;
 
-    std::vector<SpringLowPass> gain_filters;
+    std::vector<ChannelState> channel_states;
     TransferCurve transfer_curve;
 
     float attack_ms = 10.0f;
@@ -23,14 +32,14 @@ struct EngineImpl : public Engine {
     void update_gain_filter_pars()
     {
         // Note: this might be called on audio thread.
-        for (auto& f : gain_filters) {
-            f.set_critically_damped_with_time_constant(attack_ms / 1000, release_ms / 1000);
+        for (auto& chs : channel_states) {
+            chs.gain_filter.set_critically_damped_with_time_constant(attack_ms / 1000, release_ms / 1000);
             switch (gain_control_application) {
             case GainControlApplication::on_squared_input:
             case GainControlApplication::on_gr_db:
-                f.set_state(0.0, 0.0);
+                chs.gain_filter.set_state(0.0, 0.0);
             case GainControlApplication::on_gr_mag:
-                f.set_state(1.0, 0.0);
+                chs.gain_filter.set_state(1.0, 0.0);
             }
         }
     }
@@ -38,27 +47,31 @@ struct EngineImpl : public Engine {
     void prepare_to_play(double sr, int /*maxBlockSize*/, int num_channels) override
     {
         sample_rate = sr;
-        gain_filters.assign(num_channels, SpringLowPass(sample_rate));
-        for (auto& f : gain_filters) {
-            f.set_state(0.0, 0.0);
+        channel_states.assign(num_channels, ChannelState(sample_rate));
+        for (auto& chs : channel_states) {
+            chs.gain_filter.set_state(0.0, 0.0);
         }
         update_gain_filter_pars();
     }
 
     void release_resources() override
     {
-        gain_filters.clear();
+        channel_states.clear();
     }
 
     void process_block(std::span<float* const> channel_data, int num_samples) override
     {
-        assert(channel_data.size() == gain_filters.size());
+        assert(channel_data.size() == channel_states.size());
+        if (num_samples == 0) {
+            return;
+        }
         for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
             auto* channel_buf = channel_data[ch_ix];
-            auto& gf = gain_filters[ch_ix];
+            auto& chs = channel_states[ch_ix];
+            auto& gf = chs.gain_filter;
+            double gain = NAN;
             for (int i = 0; i < num_samples; ++i) {
                 const double input_sample = channel_buf[i];
-                double gain = NAN;
                 switch (gain_control_application) {
                 case GainControlApplication::on_squared_input: {
                     const auto smoothed_signal_power = gf.process(square(input_sample));
@@ -77,7 +90,19 @@ struct EngineImpl : public Engine {
                 }
                 channel_buf[i] = ffcast<float>(input_sample * gain * makeup_gain);
             }
+            chs.gain = gain; // The latest gain.
         }
+    }
+    std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) override
+    {
+        assert(channel_data.size() == 1);
+        std::vector<Trace> ts;
+        float* cd = channel_data[0];
+        for (int j = 0; j < num_samples; ++j, ++cd) {
+            process_block(std::span<float* const>(&cd, 1), 1);
+            ts.push_back(Trace{.gain = channel_states[0].gain});
+        }
+        return ts;
     }
 
     std::optional<TransferCurveUpdateResult> set_transfer_curve(const TransferCurvePars& p) override

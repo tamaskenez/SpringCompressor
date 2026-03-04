@@ -93,6 +93,7 @@ TransferCurveUpdateResult TransferCurve::update()
                 };
             }
         }
+        break; // NOLINT(clang-analyzer-deadcode.DeadStores)
     case TransferCurveNormalizer::reference_level:
         makeup_gain_db = 0;
         makeup_gain_db = -gain_db_for_input_db(pars.normalizer_db);
