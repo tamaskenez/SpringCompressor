@@ -38,6 +38,7 @@ private:
     TransferCurvePars pars;
     double makeup_gain_db = 0;
     double knee_A = NAN, knee_B = NAN;
+    double output_db_right_of_knee = NAN;
 
     TransferCurveUpdateResult update();
 };

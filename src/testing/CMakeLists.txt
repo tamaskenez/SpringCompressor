@@ -11,6 +11,7 @@ target_link_libraries(testing
     PRIVATE
         SpringCompressorEngine
         GTest::gtest_main
+        meadow::meadow
 )
 
 include(GoogleTest)

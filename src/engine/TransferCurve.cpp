@@ -31,17 +31,27 @@ float TransferCurve::gain_db_for_input_db(float input_db) const
     if (input_db <= pars.threshold_db) {
         NOP;
     } else if (input_db <= pars.threshold_db + pars.knee_width_db) {
-        result = knee_A * exp(knee_B * (input_db - pars.threshold_db)) + pars.threshold_db - knee_A;
+        result = knee_A * exp(knee_B * (input_db - pars.threshold_db)) + pars.threshold_db - knee_A - input_db;
     } else {
-        result = (input_db - pars.threshold_db) / pars.ratio + pars.threshold_db - input_db;
+        result = (input_db - pars.threshold_db - pars.knee_width_db) / pars.ratio + output_db_right_of_knee - input_db;
     }
     return ffcast<float>(result + makeup_gain_db);
 }
 
 TransferCurveUpdateResult TransferCurve::update()
 {
-    knee_B = log(1.0 / pars.ratio) / pars.knee_width_db;
-    knee_A = 1 / knee_B;
+    if (pars.ratio == 1) {
+        pars.knee_width_db = 0;
+    }
+    if (pars.knee_width_db == 0) {
+        knee_A = NAN;
+        knee_B = NAN;
+        output_db_right_of_knee = pars.threshold_db;
+    } else {
+        knee_B = log(1.0 / pars.ratio) / pars.knee_width_db;
+        knee_A = 1 / knee_B;
+        output_db_right_of_knee = knee_A * exp(knee_B * pars.knee_width_db) + pars.threshold_db - knee_A;
+    }
     switch (pars.normalizer) {
     case TransferCurveNormalizer::makeup_gain:
         makeup_gain_db = pars.normalizer_db;
@@ -54,21 +64,31 @@ TransferCurveUpdateResult TransferCurve::update()
             return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, -INFINITY};
         } else {
             // makeup_gain_db > 0
+            if (pars.ratio == 1) {
+                // Output is always greater.
+                return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, NAN};
+            }
             auto gain_db_right_of_knee = gain_db_for_input_db(pars.threshold_db + pars.knee_width_db);
             if (gain_db_right_of_knee <= 0) {
                 // Knee must have crossed the gain = 0 line.
-                // knee_A * exp(knee_B * (input_db - threshold_db)) + threshold_db - knee_A + makeup_gain_db = 0
-                return TransferCurveUpdateResult{
-                  TransferCurveNormalizer::reference_level,
-                  ffcast<float>(
-                    log((knee_A - makeup_gain_db - pars.threshold_db) / knee_A) / knee_B + pars.threshold_db
-                  )
-                };
+                // knee_A * exp(knee_B * (input_db - pars.threshold_db)) + pars.threshold_db - knee_A - input_db = 0;
+                double left = pars.threshold_db;
+                double right = pars.threshold_db + pars.knee_width_db;
+                for (;;) {
+                    const auto m = (left + right) / 2;
+                    if (right - left < 1e-5) {
+                        return TransferCurveUpdateResult{TransferCurveNormalizer::reference_level, ffcast<float>(m)};
+                    }
+                    (gain_db_for_input_db(m) <= 0 ? right : left) = m;
+                }
             } else {
+                // (input_db - threshold_db - knee_width_db) / ratio + output_db_right_of_knee - input_db + makeup_gain
+                // = 0
                 return TransferCurveUpdateResult{
                   TransferCurveNormalizer::reference_level,
                   ffcast<float>(
-                    ((makeup_gain_db + pars.threshold_db) * pars.ratio - pars.threshold_db) / (pars.ratio - 1)
+                    ((output_db_right_of_knee + makeup_gain_db) * pars.ratio - pars.threshold_db - pars.knee_width_db)
+                    / (pars.ratio - 1)
                   )
                 };
             }

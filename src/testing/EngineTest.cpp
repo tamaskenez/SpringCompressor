@@ -17,8 +17,10 @@ TEST(Engine, save_sine_compression)
 
     auto engine = make_engine();
     engine->prepare_to_play(sample_rate, num_samples, 1);
-    engine->set_threshold_db(-20.0f);
-    engine->set_ratio(4.0f);
+    TransferCurvePars tcp;
+    tcp.threshold_db = -20;
+    tcp.ratio = 4;
+    engine->set_transfer_curve(tcp);
     engine->set_attack_ms(15.0f);
     engine->set_release_ms(15.0f);
 
@@ -38,23 +40,14 @@ TEST(Engine, save_sine_compression)
 
     std::vector<float> output = input;
     float* channel = output.data();
-    std::vector<Engine::Trace> trace_block;
-    engine->process_block(std::span<float* const>(&channel, 1), num_samples, &trace_block);
+    auto trace_block = engine->process_block_with_trace(std::span<float* const>(&channel, 1), num_samples);
 
     std::ofstream file(TESTING_OUTPUT_DIR "/Engine_sine_compression.txt");
     ASSERT_TRUE(file.is_open());
 
-#ifdef NDEBUG
-    ASSERT_TRUE(trace_block.empty());
-#else
     ASSERT_TRUE(trace_block.size() == num_samples);
-#endif
     for (int i = 0; i < num_samples; ++i) {
-        file << std::format("{} {}", input[i], output[i]);
-#ifndef NDEBUG
         const auto& ti = trace_block[i];
-        file << std::format(" {} {}", ti.smoothed_signal_power, ti.gain);
-#endif
-        file << "\n";
+        file << std::format("{} {} {}\n", input[i], output[i], ti.gain);
     }
 }
