@@ -24,10 +24,14 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .attack_ms = apvts.getRawParameterValue("attack"),
         .release_ms = apvts.getRawParameterValue("release"),
         .makeup_gain_db = apvts.getRawParameterValue("makeup"),
+        .reference_level_db = apvts.getRawParameterValue("reference_level"),
         .knee_width_db = apvts.getRawParameterValue("knee_width"),
         .gain_control_application = apvts.getRawParameterValue("gain_filter")
       }
 {
+    for (auto* id :
+         {"threshold", "ratio", "attack", "release", "makeup", "reference_level", "knee_width", "gain_filter"})
+        apvts.addParameterListener(id, this);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::createParameterLayout()
@@ -86,6 +90,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
 
     params.push_back(
       std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"reference_level", 1},
+        "Reference Level",
+        juce::NormalisableRange<float>(-40.0f, 0.0f, 0.1f),
+        -20.0f,
+        juce::AudioParameterFloatAttributes{}.withLabel("dB")
+      )
+    );
+
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"knee_width", 1},
         "Knee width",
         juce::NormalisableRange<float>(0.0f, 40.0f, 0.1f),
@@ -106,11 +120,84 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
 void SpringCompressorProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     engine->prepare_to_play(sampleRate, samplesPerBlock, getTotalNumInputChannels());
+    audio_thread_running = true;
 }
 
 void SpringCompressorProcessor::releaseResources()
 {
+    audio_thread_running = false;
     engine->release_resources();
+
+    // There can be messages stuck in the ui_to_audio queue because the audio thread stopped just after we enqueued
+    // something but before the audio thread could dequeue it. Process those messages here.
+    TransferCurvePars tcp;
+    while (ui_to_audio_queue.try_dequeue(tcp)) {
+        engine_set_transfer_curve_and_update_ui(tcp);
+    }
+}
+
+namespace
+{
+const std::vector<juce::String> k_transfer_curve_parameters = {
+  "threshold", "ratio", "knee_width", "makeup", "reference_level"
+};
+}
+
+void SpringCompressorProcessor::engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp)
+{
+    if (auto tcur = engine->set_transfer_curve(tcp)) {
+        switch (tcur->normalizer) {
+        case TransferCurveNormalizer::makeup_gain:
+            apvts.getParameter("makeup")->setValueNotifyingHost(tcur->normalizer_db);
+            break;
+        case TransferCurveNormalizer::reference_level:
+            apvts.getParameter("reference_level")->setValueNotifyingHost(tcur->normalizer_db);
+            break;
+        }
+    }
+}
+
+void SpringCompressorProcessor::parameterChanged(const juce::String& name, float f)
+{
+    if (std::ranges::find(k_transfer_curve_parameters, name) == k_transfer_curve_parameters.end()) {
+        // The engine never changes non-transfer curve parameters, they don't need special handling. They will be read
+        // in processBlock directly.
+        return;
+    }
+
+    // Use the last normalizer or the one that is being changed now.
+    float normalizer_db;
+    if (name == "makeup") {
+        last_normalizer = TransferCurveNormalizer::makeup_gain;
+        normalizer_db = f;
+    } else if (name == "reference_level") {
+        last_normalizer = TransferCurveNormalizer::reference_level;
+        normalizer_db = f;
+    } else {
+        switch (last_normalizer) {
+        case TransferCurveNormalizer::makeup_gain:
+            normalizer_db = raw_parameter_values.makeup_gain_db->load();
+            break;
+        case TransferCurveNormalizer::reference_level:
+            normalizer_db = raw_parameter_values.reference_level_db->load();
+            break;
+        }
+    }
+    const auto tcp = TransferCurvePars{
+      .threshold_db = raw_parameter_values.threshold_db->load(),
+      .ratio = raw_parameter_values.ratio->load(),
+      .knee_width_db = raw_parameter_values.knee_width_db->load(),
+      .normalizer = last_normalizer,
+      .normalizer_db = normalizer_db
+    };
+
+    if (audio_thread_running) {
+        // Handle it on audio thread, in processBlock.
+        ui_to_audio_queue.enqueue(tcp);
+    } else {
+        // Handle it now.
+        engine_set_transfer_curve_and_update_ui(tcp);
+    }
 }
 
 void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -123,18 +210,15 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     assert(getMainBusNumInputChannels() == getTotalNumInputChannels());
     assert(getMainBusNumOutputChannels() == getTotalNumOutputChannels());
 
-    engine->set_transfer_curve(
-      TransferCurvePars{
-        .threshold_db = raw_parameter_values.threshold_db->load(),
-        .ratio = raw_parameter_values.ratio->load(),
-        .knee_width_db = raw_parameter_values.knee_width_db->load(),
-        .normalizer = TransferCurveNormalizer::makeup_gain,
-        .normalizer_db = raw_parameter_values.makeup_gain_db->load(),
-      }
-    );
+    TransferCurvePars tcp;
+    while (ui_to_audio_queue.try_dequeue(tcp)) {
+        if (auto tcur = engine->set_transfer_curve(tcp)) {
+            audio_to_ui_queue.enqueue(TransferCurveUpdateResult{*tcur});
+        }
+    }
+
     engine->set_attack_ms(raw_parameter_values.attack_ms->load());
     engine->set_release_ms(raw_parameter_values.release_ms->load());
-
     {
         const auto e = magic_enum::enum_cast<GainControlApplication>(
           iround<int>(raw_parameter_values.gain_control_application->load())

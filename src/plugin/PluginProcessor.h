@@ -1,12 +1,16 @@
 #pragma once
 
-#include <juce_audio_processors/juce_audio_processors.h>
-
 #include "engine.h"
 
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <readerwriterqueue/readerwriterqueue.h>
+
+#include <any>
 #include <memory>
 
-class SpringCompressorProcessor : public juce::AudioProcessor
+class SpringCompressorProcessor
+    : public juce::AudioProcessor
+    , private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     SpringCompressorProcessor();
@@ -71,16 +75,23 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
 private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
     std::unique_ptr<Engine> engine;
     struct RawParameterValues {
         using float_pointer = std::atomic<float>*;
-        float_pointer threshold_db, ratio, attack_ms, release_ms, makeup_gain_db, knee_width_db,
+        float_pointer threshold_db, ratio, attack_ms, release_ms, makeup_gain_db, reference_level_db, knee_width_db,
           gain_control_application;
     } raw_parameter_values;
 
+    TransferCurveNormalizer last_normalizer = TransferCurveNormalizer::makeup_gain;
+    moodycamel::ReaderWriterQueue<TransferCurvePars> ui_to_audio_queue;
+    moodycamel::ReaderWriterQueue<std::any> audio_to_ui_queue;
+    bool audio_thread_running = false;
     juce::String program0_name = "program#0";
 
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void parameterChanged(const juce::String&, float) override;
+    void engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorProcessor)
 };
