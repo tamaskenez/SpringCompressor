@@ -30,24 +30,25 @@ juce::Path TransferCurveComponent::build_curve_path() const
         return {};
 
     const auto& r = *result;
-    const float threshold_x = r.threshold[0];
-    const float threshold_y = r.threshold[1];
-    const float slope1_offset = threshold_y - threshold_x;
 
     juce::Path path;
-    path.startNewSubPath(to_point(k_db_min, k_db_min + slope1_offset));
-    path.lineTo(to_point(threshold_x, threshold_y));
-
-    if (!r.knee_ys.empty()) {
-        const float knee_start_x = std::ceil(threshold_x);
-        const int knee_size = iicast<int>(r.knee_ys.size());
-        for (int i = 0; i < knee_size; ++i)
-            path.lineTo(to_point(knee_start_x + ifcast<float>(i), r.knee_ys[sucast(i)]));
+    auto t = std::min(r.threshold[0] - k_db_min, r.threshold[1] - k_db_min);
+    if (t >= 0) {
+        path.startNewSubPath(to_point(r.threshold[0] - t, r.threshold[1] - t));
+        path.lineTo(to_point(r.threshold[0], r.threshold[1]));
+    } else {
+        path.startNewSubPath(to_point(r.threshold[0], r.threshold[1]));
     }
 
-    const float x1 = r.knee_right[0];
-    const float y1 = r.knee_right[1];
-    path.lineTo(to_point(k_db_max, y1 + r.oo_ratio * (k_db_max - x1)));
+    if (!r.knee_ys.empty()) {
+        const float knee_start_x = std::floor(r.threshold[0]) + 1;
+        for (size_t i = 0; i < r.knee_ys.size(); ++i)
+            path.lineTo(to_point(knee_start_x + ifcast<float>(i), r.knee_ys[i]));
+    }
+
+    path.lineTo(to_point(r.knee_right[0], r.knee_right[1]));
+    t = std::min(k_db_max - r.knee_right[0], (k_db_max - r.knee_right[1]) / r.oo_ratio);
+    path.lineTo(to_point(r.knee_right[0] + t, r.knee_right[1] + r.oo_ratio * t));
 
     return path;
 }

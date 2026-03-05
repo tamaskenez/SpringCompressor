@@ -53,7 +53,8 @@ double TransferCurve::gain_db_for_input_db(double input_db) const
     } else if (input_db <= pars.threshold_db + pars.knee_width_db) {
         result = knee_A * exp(knee_B * (input_db - pars.threshold_db)) + pars.threshold_db - knee_A - input_db;
     } else {
-        result = (input_db - pars.threshold_db - pars.knee_width_db) / pars.ratio + output_db_right_of_knee - input_db;
+        result = (input_db - pars.threshold_db - pars.knee_width_db) / pars.ratio
+               + output_db_without_makeup_right_of_knee - input_db;
     }
     return result + makeup_gain_db;
 }
@@ -69,9 +70,12 @@ TransferCurveUpdateResult TransferCurve::make_TransferCurveUpdateResult(Transfer
     return TransferCurveUpdateResult{
       .normalizer = n,
       .normalizer_db = ndb,
-      .threshold = AF2{pars.threshold_db,                      ffcast<float>(pars.threshold_db + makeup_gain_db)},
+      .threshold = AF2{pars.threshold_db,                      ffcast<float>(pars.threshold_db + makeup_gain_db)                     },
       .knee_ys = knee_ys,
-      .knee_right = AF2{pars.threshold_db + pars.knee_width_db, ffcast<float>(output_db_right_of_knee)           },
+      .knee_right =
+        AF2{
+                       pars.threshold_db + pars.knee_width_db, ffcast<float>(output_db_without_makeup_right_of_knee + makeup_gain_db)
+        },
       .oo_ratio = 1 / pars.ratio
     };
 }
@@ -81,11 +85,11 @@ TransferCurveUpdateResult TransferCurve::update()
     if (pars.knee_width_db == 0) {
         knee_A = NAN;
         knee_B = NAN;
-        output_db_right_of_knee = pars.threshold_db;
+        output_db_without_makeup_right_of_knee = pars.threshold_db;
     } else {
         knee_B = log(1.0 / pars.ratio) / pars.knee_width_db;
         knee_A = 1 / knee_B;
-        output_db_right_of_knee = knee_A * exp(knee_B * pars.knee_width_db) + pars.threshold_db - knee_A;
+        output_db_without_makeup_right_of_knee = knee_A * exp(knee_B * pars.knee_width_db) + pars.threshold_db - knee_A;
     }
     switch (pars.normalizer) {
     case TransferCurveNormalizer::makeup_gain:
@@ -119,12 +123,13 @@ TransferCurveUpdateResult TransferCurve::update()
                     (gain_db_for_input_db(m) <= 0 ? right : left) = m;
                 }
             } else {
-                // (input_db - threshold_db - knee_width_db) / ratio + output_db_right_of_knee - input_db + makeup_gain
-                // = 0
+                // (input_db - threshold_db - knee_width_db) / ratio + output_db_without_makeup_right_of_knee - input_db
+                // + makeup_gain = 0
                 return make_TransferCurveUpdateResult(
                   TransferCurveNormalizer::reference_level,
                   ffcast<float>(
-                    ((output_db_right_of_knee + makeup_gain_db) * pars.ratio - pars.threshold_db - pars.knee_width_db)
+                    ((output_db_without_makeup_right_of_knee + makeup_gain_db) * pars.ratio - pars.threshold_db
+                     - pars.knee_width_db)
                     / (pars.ratio - 1)
                   )
                 );
