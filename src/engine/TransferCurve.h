@@ -22,15 +22,14 @@ struct TransferCurvePars {
       TransferCurveNormalizer::makeup_gain; // Tells what the `normalizer_db` field means.
     float normalizer_db = 0;
 
-    bool semantically_equals(const TransferCurvePars&) const;
     bool sanitize();
 };
 
 const int k_max_knee_width_db = 40;
 
-struct TransferCurveUpdateResult {
-    TransferCurveNormalizer normalizer;
-    float normalizer_db;
+struct TransferCurveState {
+    float makeup_gain_db;
+    float reference_level_db;
 
     // Describe the transfer curve:
     AF2 threshold; // dy/dx = 1 diagonal line until (threshold[0], threshold[1])
@@ -55,17 +54,18 @@ public:
     // Return nullopt if there were no changes.
     // Otherwise, when the makeup gain was specified in p, return the corresponding, computed reference level.
     // If the reference level was specified in pars, return the corresponding, computed makeup gain.
-    std::optional<TransferCurveUpdateResult> set(const TransferCurvePars& pars);
+    TransferCurveState set(const TransferCurvePars& pars);
 
     [[nodiscard]] double gain_db_for_input_db(double input_db) const;
 
-    TransferCurveUpdateResult make_TransferCurveUpdateResult(TransferCurveNormalizer n, float db);
+    TransferCurveState get_state() const;
 
 private:
     TransferCurvePars pars;
     double makeup_gain_db = 0;
+    double reference_level_db = 0;
     double knee_A = NAN, knee_B = NAN;
     double output_db_without_makeup_right_of_knee = NAN;
 
-    TransferCurveUpdateResult update();
+    TransferCurveState update();
 };

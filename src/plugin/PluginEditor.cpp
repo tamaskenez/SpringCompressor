@@ -3,10 +3,6 @@
 SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     : AudioProcessorEditor(&p)
     , processorRef(p)
-    , ui_refresh_timer([this] {
-        if (processorRef.latest_tcur)
-            transfer_curve_component.set_result(*processorRef.latest_tcur);
-    })
     , thresholdAttachment(p.apvts, "threshold", thresholdSlider)
     , ratioAttachment(p.apvts, "ratio", ratioSlider)
     , attackAttachment(p.apvts, "attack", attackSlider)
@@ -35,9 +31,6 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     setupSlider(kneeWidthSlider, kneeWidthLabel, "Knee width");
 
     addAndMakeVisible(transfer_curve_component);
-    if (p.latest_tcur)
-        transfer_curve_component.set_result(*p.latest_tcur);
-    ui_refresh_timer.startTimer(33);
 
     auto* gain_filter_param = dynamic_cast<juce::AudioParameterChoice*>(p.apvts.getParameter("gain_filter"));
     for (int i = 0; i < gain_filter_param->choices.size(); ++i)
@@ -80,4 +73,9 @@ void SpringCompressorEditor::resized()
 
     const int square = std::min(curve_area.getWidth(), curve_area.getHeight());
     transfer_curve_component.setBounds(curve_area.withSizeKeepingCentre(square, square));
+}
+
+void SpringCompressorEditor::set_transfer_curve(const TransferCurveState& tcur)
+{
+    transfer_curve_component.set_transfer_curve(tcur);
 }

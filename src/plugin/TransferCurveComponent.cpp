@@ -4,7 +4,7 @@
 
 #include <cmath>
 
-void TransferCurveComponent::set_result(const TransferCurveUpdateResult& r)
+void TransferCurveComponent::set_transfer_curve(const TransferCurveState& r)
 {
     result = r;
     repaint();

@@ -9,11 +9,11 @@
 class TransferCurveComponent : public juce::Component
 {
 public:
-    void set_result(const TransferCurveUpdateResult& r);
+    void set_transfer_curve(const TransferCurveState& r);
     void paint(juce::Graphics&) override;
 
 private:
-    std::optional<TransferCurveUpdateResult> result;
+    std::optional<TransferCurveState> result;
 
     static constexpr float k_db_min = -60.f;
     static constexpr float k_db_max = 0.f;

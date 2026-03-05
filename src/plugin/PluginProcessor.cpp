@@ -2,12 +2,12 @@
 
 #include "PluginEditor.h"
 #include "engine.h"
+#include "meadow/math.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
 
 #include <cassert>
-#include <ranges>
 #include <span>
 
 namespace
@@ -39,18 +39,6 @@ ui_refresh_timer([this](){on_ui_refresh_timer_elapsed();})
          {"threshold", "ratio", "attack", "release", "makeup", "reference_level", "knee_width", "gain_filter"})
         apvts.addParameterListener(id, this);
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
-
-    // Prime the transfer curve so editors opened before any parameter change can draw immediately.
-    if (auto tcur = engine->set_transfer_curve(
-          TransferCurvePars{
-            .threshold_db = raw_parameter_values.threshold_db->load(),
-            .ratio = raw_parameter_values.ratio->load(),
-            .knee_width_db = raw_parameter_values.knee_width_db->load(),
-            .normalizer = last_normalizer,
-            .normalizer_db = raw_parameter_values.makeup_gain_db->load()
-          }
-        ))
-        latest_tcur = MOVE(*tcur);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::createParameterLayout()
@@ -101,7 +89,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
       std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"makeup", 1},
         "Makeup Gain",
-        juce::NormalisableRange<float>(-12.0f, 24.0f, 0.1f),
+        juce::NormalisableRange<float>(0.0f, 32.0f, 0.1f),
         0.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("dB")
       )
@@ -111,7 +99,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
       std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"reference_level", 1},
         "Reference Level",
-        juce::NormalisableRange<float>(-40.0f, 0.0f, 0.1f),
+        juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f),
         -20.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("dB")
       )
@@ -162,29 +150,32 @@ const std::vector<juce::String> k_transfer_curve_parameters = {
 };
 }
 
-void SpringCompressorProcessor::update_ui_with_transfer_curve_update_result(const TransferCurveUpdateResult& tcur)
+void SpringCompressorProcessor::update_ui_with_transfer_curve_update_result(const TransferCurveState& tcur)
 {
-    latest_tcur = tcur;
-    juce::RangedAudioParameter* p;
-    switch (tcur.normalizer) {
-    case TransferCurveNormalizer::makeup_gain:
-        p = apvts.getParameter("makeup");
-        break;
-    case TransferCurveNormalizer::reference_level:
-        p = apvts.getParameter("reference_level");
-        break;
-    }
+    println(
+      "[update_ui_with_transfer_curve_update_result]: makeup: {}, reference_level: {}",
+      tcur.makeup_gain_db,
+      tcur.reference_level_db
+    );
     ignore_parameter_changed = true;
-    if (p->getNormalisableRange().getRange().contains(tcur.normalizer_db)) {
-        p->setValueNotifyingHost(tcur.normalizer_db);
-    } else if (std::isnan(tcur.normalizer_db)) {
-        p->setValueNotifyingHost(p->getNormalisableRange().start);
-    } else {
-        p->setValueNotifyingHost(
-          std::clamp(tcur.normalizer_db, p->getNormalisableRange().start, p->getNormalisableRange().end)
-        );
+    {
+        auto* p = apvts.getParameter("makeup");
+        const auto& nr = p->getNormalisableRange();
+        assert(in_cc_range(tcur.makeup_gain_db, nr.start, nr.end));
+        p->setValueNotifyingHost(p->convertTo0to1(std::clamp(tcur.makeup_gain_db, nr.start, nr.end)));
+    }
+    {
+        auto* p = apvts.getParameter("reference_level");
+        const auto& nr = p->getNormalisableRange();
+        assert(in_cc_range(tcur.reference_level_db, nr.start, nr.end));
+        p->setValueNotifyingHost(p->convertTo0to1(std::clamp(tcur.reference_level_db, nr.start, nr.end)));
     }
     ignore_parameter_changed = false;
+
+    if (auto* editor = this->getActiveEditor()) {
+        dynamic_cast<SpringCompressorEditor*>(editor)->set_transfer_curve(tcur);
+        editor->repaint();
+    }
 }
 
 void SpringCompressorProcessor::engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp)
@@ -206,7 +197,7 @@ void SpringCompressorProcessor::parameterChanged(const juce::String& name, float
     }
 
     // Use the last normalizer or the one that is being changed now.
-    float normalizer_db;
+    std::optional<float> normalizer_db;
     if (name == "makeup") {
         last_normalizer = TransferCurveNormalizer::makeup_gain;
         normalizer_db = f;
@@ -228,7 +219,7 @@ void SpringCompressorProcessor::parameterChanged(const juce::String& name, float
       .ratio = raw_parameter_values.ratio->load(),
       .knee_width_db = raw_parameter_values.knee_width_db->load(),
       .normalizer = last_normalizer,
-      .normalizer_db = normalizer_db
+      .normalizer_db = normalizer_db.value()
     };
 
     if (audio_thread_running) {
@@ -253,7 +244,7 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     TransferCurvePars tcp;
     while (ui_to_audio_queue.try_dequeue(tcp)) {
         if (auto tcur = engine->set_transfer_curve(tcp)) {
-            audio_to_ui_queue.enqueue(TransferCurveUpdateResult{*tcur});
+            audio_to_ui_queue.enqueue(TransferCurveState{*tcur});
         }
     }
 
@@ -280,7 +271,9 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
 juce::AudioProcessorEditor* SpringCompressorProcessor::createEditor()
 {
-    return new SpringCompressorEditor(*this);
+    auto* editor = new SpringCompressorEditor(*this);
+    editor->set_transfer_curve(engine->get_transfer_curve_state());
+    return editor;
 }
 
 void SpringCompressorProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -301,7 +294,7 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
 {
     std::any msg;
     while (audio_to_ui_queue.try_dequeue(msg)) {
-        if (auto* tcur = std::any_cast<TransferCurveUpdateResult>(&msg)) {
+        if (auto* tcur = std::any_cast<TransferCurveState>(&msg)) {
             update_ui_with_transfer_curve_update_result(*tcur);
         } else {
             assert(false);

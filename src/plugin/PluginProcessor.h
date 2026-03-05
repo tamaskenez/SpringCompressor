@@ -74,7 +74,6 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
-    std::optional<TransferCurveUpdateResult> latest_tcur;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -96,7 +95,7 @@ private:
     JuceTimer ui_refresh_timer;
 
     void parameterChanged(const juce::String&, float) override;
-    void update_ui_with_transfer_curve_update_result(const TransferCurveUpdateResult& tcur);
+    void update_ui_with_transfer_curve_update_result(const TransferCurveState& tcur);
     void engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp);
     void on_ui_refresh_timer_elapsed();
 

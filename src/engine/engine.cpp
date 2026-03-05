@@ -107,7 +107,7 @@ struct EngineImpl : public Engine {
         return ts;
     }
 
-    std::optional<TransferCurveUpdateResult> set_transfer_curve(const TransferCurvePars& p) override
+    std::optional<TransferCurveState> set_transfer_curve(const TransferCurvePars& p) override
     {
         return transfer_curve.set(p);
     }
@@ -127,6 +127,10 @@ struct EngineImpl : public Engine {
             gain_control_application = application;
             update_gain_filter_pars();
         }
+    }
+    TransferCurveState get_transfer_curve_state() const override
+    {
+        return transfer_curve.get_state();
     }
 };
 

@@ -15,6 +15,8 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
 
+    void set_transfer_curve(const TransferCurveState& tcur);
+
 private:
     SpringCompressorProcessor& processorRef;
 
@@ -26,7 +28,6 @@ private:
     juce::Label gainFilterLabel;
 
     TransferCurveComponent transfer_curve_component;
-    JuceTimer ui_refresh_timer;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     SliderAttachment thresholdAttachment, ratioAttachment, attackAttachment, releaseAttachment, makeupAttachment,

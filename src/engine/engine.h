@@ -29,10 +29,12 @@ public:
     virtual std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) = 0;
     virtual void release_resources() = 0;
 
-    virtual std::optional<TransferCurveUpdateResult> set_transfer_curve(const TransferCurvePars& p) = 0;
+    virtual std::optional<TransferCurveState> set_transfer_curve(const TransferCurvePars& p) = 0;
     virtual void set_attack_ms(float ms) = 0;
     virtual void set_release_ms(float ms) = 0;
     virtual void set_gain_control_application(GainControlApplication application) = 0;
+
+    virtual TransferCurveState get_transfer_curve_state() const = 0;
 };
 
 std::unique_ptr<Engine> make_engine();
