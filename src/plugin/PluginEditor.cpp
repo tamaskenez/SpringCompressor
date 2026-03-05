@@ -3,6 +3,10 @@
 SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     : AudioProcessorEditor(&p)
     , processorRef(p)
+    , ui_refresh_timer([this] {
+        if (processorRef.latest_tcur)
+            transfer_curve_component.set_result(*processorRef.latest_tcur);
+    })
     , thresholdAttachment(p.apvts, "threshold", thresholdSlider)
     , ratioAttachment(p.apvts, "ratio", ratioSlider)
     , attackAttachment(p.apvts, "attack", attackSlider)
@@ -30,6 +34,11 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     setupSlider(referenceLevelSlider, referenceLevelLabel, "Ref. Level");
     setupSlider(kneeWidthSlider, kneeWidthLabel, "Knee width");
 
+    addAndMakeVisible(transfer_curve_component);
+    if (p.latest_tcur)
+        transfer_curve_component.set_result(*p.latest_tcur);
+    ui_refresh_timer.startTimer(33);
+
     auto* gain_filter_param = dynamic_cast<juce::AudioParameterChoice*>(p.apvts.getParameter("gain_filter"));
     for (int i = 0; i < gain_filter_param->choices.size(); ++i)
         gainFilterComboBox.addItem(gain_filter_param->choices[i], i + 1);
@@ -41,7 +50,7 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     addAndMakeVisible(gainFilterComboBox);
     addAndMakeVisible(gainFilterLabel);
 
-    setSize(800, 220);
+    setSize(800, 450);
 }
 
 void SpringCompressorEditor::paint(juce::Graphics& g)
@@ -51,7 +60,9 @@ void SpringCompressorEditor::paint(juce::Graphics& g)
 
 void SpringCompressorEditor::resized()
 {
-    auto area = getLocalBounds().reduced(10).withTrimmedTop(24);
+    auto area = getLocalBounds().reduced(10);
+    const auto curve_area = area.removeFromBottom(220);
+    area = area.withTrimmedTop(24);
     const int sliderWidth = area.getWidth() / 8;
 
     for (auto* slider :
@@ -66,4 +77,7 @@ void SpringCompressorEditor::resized()
 
     auto col = area.removeFromLeft(sliderWidth);
     gainFilterComboBox.setBounds(col.withSizeKeepingCentre(sliderWidth - 4, 24));
+
+    const int square = std::min(curve_area.getWidth(), curve_area.getHeight());
+    transfer_curve_component.setBounds(curve_area.withSizeKeepingCentre(square, square));
 }

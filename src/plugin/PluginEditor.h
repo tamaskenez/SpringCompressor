@@ -2,7 +2,9 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "JuceTimer.h"
 #include "PluginProcessor.h"
+#include "TransferCurveComponent.h"
 
 class SpringCompressorEditor : public juce::AudioProcessorEditor
 {
@@ -22,6 +24,9 @@ private:
 
     juce::ComboBox gainFilterComboBox;
     juce::Label gainFilterLabel;
+
+    TransferCurveComponent transfer_curve_component;
+    JuceTimer ui_refresh_timer;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     SliderAttachment thresholdAttachment, ratioAttachment, attackAttachment, releaseAttachment, makeupAttachment,

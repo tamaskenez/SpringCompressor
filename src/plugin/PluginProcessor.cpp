@@ -39,6 +39,18 @@ ui_refresh_timer([this](){on_ui_refresh_timer_elapsed();})
          {"threshold", "ratio", "attack", "release", "makeup", "reference_level", "knee_width", "gain_filter"})
         apvts.addParameterListener(id, this);
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
+
+    // Prime the transfer curve so editors opened before any parameter change can draw immediately.
+    if (auto tcur = engine->set_transfer_curve(
+          TransferCurvePars{
+            .threshold_db = raw_parameter_values.threshold_db->load(),
+            .ratio = raw_parameter_values.ratio->load(),
+            .knee_width_db = raw_parameter_values.knee_width_db->load(),
+            .normalizer = last_normalizer,
+            .normalizer_db = raw_parameter_values.makeup_gain_db->load()
+          }
+        ))
+        latest_tcur = MOVE(*tcur);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::createParameterLayout()
@@ -152,6 +164,7 @@ const std::vector<juce::String> k_transfer_curve_parameters = {
 
 void SpringCompressorProcessor::update_ui_with_transfer_curve_update_result(const TransferCurveUpdateResult& tcur)
 {
+    latest_tcur = tcur;
     juce::RangedAudioParameter* p;
     switch (tcur.normalizer) {
     case TransferCurveNormalizer::makeup_gain:

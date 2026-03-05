@@ -74,6 +74,7 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    std::optional<TransferCurveUpdateResult> latest_tcur;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
