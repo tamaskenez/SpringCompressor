@@ -54,7 +54,7 @@ void SpringCompressorEditor::paint(juce::Graphics& g)
 void SpringCompressorEditor::resized()
 {
     auto area = getLocalBounds().reduced(10);
-    const auto curve_area = area.removeFromBottom(220);
+    const auto curve_area = area.removeFromBottom(TransferCurveComponent::k_window_size);
     area = area.withTrimmedTop(24);
     const int sliderWidth = area.getWidth() / 8;
 

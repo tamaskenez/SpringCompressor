@@ -3,6 +3,7 @@
 #include <meadow/cppext.h>
 
 #include <cmath>
+#include <magic_enum/magic_enum.hpp>
 
 void TransferCurveComponent::set_transfer_curve(const TransferCurveState& r)
 {
@@ -12,15 +13,14 @@ void TransferCurveComponent::set_transfer_curve(const TransferCurveState& r)
 
 juce::Rectangle<float> TransferCurveComponent::plot_area() const
 {
-    return getLocalBounds().toFloat().reduced(1.f);
+    return getLocalBounds().toFloat();
 }
 
 juce::Point<float> TransferCurveComponent::to_point(float input_db, float output_db) const
 {
     const auto area = plot_area();
-    const float range = k_db_max - k_db_min;
-    const float x = area.getX() + (input_db - k_db_min) / range * area.getWidth();
-    const float y = area.getBottom() - (output_db - k_db_min) / range * area.getHeight();
+    const float x = area.getX() + (input_db - k_db_min) * TransferCurveComponent::k_pixel_per_db;
+    const float y = area.getBottom() - (output_db - k_db_min) * TransferCurveComponent::k_pixel_per_db;
     return {x, y};
 }
 
@@ -57,10 +57,12 @@ void TransferCurveComponent::draw_grid(juce::Graphics& g) const
 {
     const auto area = plot_area();
     g.setColour(juce::Colours::white.withAlpha(0.1f));
-    for (float db = k_db_min; db <= k_db_max; db += 10.f) {
-        const auto vp = to_point(db, k_db_min);
+    constexpr int n = (k_db_max - k_db_min) / k_grid_spacing_db;
+    constexpr int first_grid_db = k_db_max - n * k_grid_spacing_db;
+    for (int db = first_grid_db; db <= k_db_max; db += k_grid_spacing_db) {
+        const auto vp = to_point(ifcast<float>(db), first_grid_db);
         g.drawVerticalLine(iround<int>(vp.x), area.getY(), area.getBottom());
-        const auto hp = to_point(k_db_min, db);
+        const auto hp = to_point(first_grid_db, ifcast<float>(db));
         g.drawHorizontalLine(iround<int>(hp.y), area.getX(), area.getRight());
     }
 }
