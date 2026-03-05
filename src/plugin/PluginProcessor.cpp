@@ -313,6 +313,7 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
             update_ui_with_transfer_curve_update_result(*tcur);
         } else if (auto* rms_samples = std::any_cast<RmsSamples>(&msg)) {
             // TODO: draw the data from rms_samples.msg on the UI.
+            (void)rms_samples;
         } else {
             assert(false);
         }

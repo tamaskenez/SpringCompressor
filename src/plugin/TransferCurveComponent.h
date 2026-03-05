@@ -13,7 +13,7 @@ public:
     void paint(juce::Graphics&) override;
 
 private:
-    std::optional<TransferCurveState> result;
+    std::optional<TransferCurveState> transfer_curve_state;
 
     static constexpr float k_db_min = -60.f;
     static constexpr float k_db_max = 0.f;

@@ -6,7 +6,7 @@
 
 void TransferCurveComponent::set_transfer_curve(const TransferCurveState& r)
 {
-    result = r;
+    transfer_curve_state = r;
     repaint();
 }
 
@@ -26,10 +26,10 @@ juce::Point<float> TransferCurveComponent::to_point(float input_db, float output
 
 juce::Path TransferCurveComponent::build_curve_path() const
 {
-    if (!result)
+    if (!transfer_curve_state)
         return {};
 
-    const auto& r = *result;
+    const auto& r = *transfer_curve_state;
 
     juce::Path path;
     auto t = std::min(r.threshold[0] - k_db_min, r.threshold[1] - k_db_min);
@@ -76,13 +76,12 @@ void TransferCurveComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colours::white.withAlpha(0.2f));
     g.drawLine(juce::Line<float>{to_point(k_db_min, k_db_min), to_point(k_db_max, k_db_max)}, 1.f);
 
+    if (transfer_curve_state) {
+        g.setColour(juce::Colour(0xff00d080));
+        g.strokePath(build_curve_path(), juce::PathStrokeType(2.f));
+    }
+
     // Border
     g.setColour(juce::Colours::white.withAlpha(0.3f));
     g.drawRect(area, 1.f);
-
-    if (!result)
-        return;
-
-    g.setColour(juce::Colour(0xff00d080));
-    g.strokePath(build_curve_path(), juce::PathStrokeType(2.f));
 }
