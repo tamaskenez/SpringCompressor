@@ -95,7 +95,10 @@ function(_suppress_juce_source_warnings_in_dir dir)
             if(NOT source MATCHES "^\\$<")
                 set_source_files_properties("${source}"
                     TARGET_DIRECTORY "${target}"
-                    PROPERTIES COMPILE_FLAGS "-w")
+                    PROPERTIES
+                        COMPILE_FLAGS "-w"
+                        SKIP_PRECOMPILE_HEADERS ON
+                )
             endif()
         endforeach()
     endforeach()

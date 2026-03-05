@@ -9,3 +9,5 @@ target_link_libraries(SpringCompressorEngine
     PRIVATE
         meadow::meadow
 )
+
+target_precompile_headers(SpringCompressorEngine PRIVATE pch.h)

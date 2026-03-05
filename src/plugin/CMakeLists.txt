@@ -36,3 +36,6 @@ target_link_libraries(SpringCompressor
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+target_precompile_headers(SpringCompressor PRIVATE pch.h)
+

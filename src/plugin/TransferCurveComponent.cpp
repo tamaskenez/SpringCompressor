@@ -65,6 +65,11 @@ void TransferCurveComponent::draw_grid(juce::Graphics& g) const
     }
 }
 
+void TransferCurveComponent::resized()
+{
+    rms_overlay = juce::Image(juce::Image::ARGB, getWidth(), getHeight(), true);
+}
+
 void TransferCurveComponent::paint(juce::Graphics& g)
 {
     const auto area = plot_area();
@@ -84,4 +89,7 @@ void TransferCurveComponent::paint(juce::Graphics& g)
     // Border
     g.setColour(juce::Colours::white.withAlpha(0.3f));
     g.drawRect(area, 1.f);
+
+    g.setOpacity(1.0f);
+    g.drawImageAt(rms_overlay, 0, 0);
 }
