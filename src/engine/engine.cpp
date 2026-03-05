@@ -1,5 +1,6 @@
 #include "engine.h"
 
+#include "RmsDetector.h"
 #include "SpringLowPass.h"
 #include "TransferCurve.h"
 
@@ -8,6 +9,12 @@
 
 #include <cassert>
 #include <vector>
+
+namespace
+{
+constexpr double k_rms_sample_period_sec = 0.001;
+constexpr double k_rms_detector_time_constant_sec = 1 / (2 * std::numbers::pi * 2.1);
+} // namespace
 
 struct ChannelState {
     explicit ChannelState(double sample_rate)
@@ -28,6 +35,10 @@ struct EngineImpl : public Engine {
     float release_ms = 100.0f;
     float makeup_gain = 1.0f;
     GainControlApplication gain_control_application = GainControlApplication::on_gr_db;
+    RmsDetector input_rms, output_rms;
+    int rms_sample_counter = 0;
+    int rms_sample_counter_period = 100;
+    std::vector<AF2> rms_samples; // [0] is input, [1] is output.
 
     void update_gain_filter_pars()
     {
@@ -46,7 +57,7 @@ struct EngineImpl : public Engine {
         }
     }
 
-    void prepare_to_play(double sr, int /*maxBlockSize*/, int num_channels) override
+    void prepare_to_play(double sr, int maxBlockSize, int num_channels) override
     {
         sample_rate = sr;
         channel_states.assign(sucast(num_channels), ChannelState(sample_rate));
@@ -54,6 +65,14 @@ struct EngineImpl : public Engine {
             chs.gain_filter.set_state(0.0, 0.0);
         }
         update_gain_filter_pars();
+        rms_sample_counter = 0;
+        rms_sample_counter_period = std::max(1, iround<int>(sample_rate * k_rms_sample_period_sec));
+        rms_samples.clear();
+        const auto max_rms_samples_in_block =
+          sucast((maxBlockSize + rms_sample_counter_period - 1) / rms_sample_counter_period);
+        rms_samples.reserve(max_rms_samples_in_block);
+        input_rms = RmsDetector(sample_rate, k_rms_detector_time_constant_sec);
+        output_rms = RmsDetector(sample_rate, k_rms_detector_time_constant_sec);
     }
 
     void release_resources() override
@@ -67,6 +86,29 @@ struct EngineImpl : public Engine {
         if (num_samples == 0) {
             return;
         }
+        rms_samples.resize(sucast((rms_sample_counter + num_samples) / rms_sample_counter_period));
+        const auto measure_rms =
+          [num_samples, channel_data, period = rms_sample_counter_period, &rms_samples_ = rms_samples](
+            RmsDetector& rms_detector, unsigned offset, int sample_counter
+          ) -> int {
+            const auto channel_data_size = ifcast<float>(channel_data.size());
+            unsigned rms_sample_ix = 0;
+            for (int i = 0; i < num_samples; ++i) {
+                float sum = 0;
+                for (auto* chd : channel_data) {
+                    sum += chd[i];
+                }
+                rms_detector.process(sum / channel_data_size);
+                if (++sample_counter >= period) {
+                    assert(rms_sample_ix < rms_samples_.size());
+                    rms_samples_[rms_sample_ix++][offset] = rms_detector.get_rms();
+                    sample_counter = 0;
+                }
+            }
+            assert(rms_sample_ix == rms_samples_.size());
+            return sample_counter;
+        };
+        measure_rms(input_rms, 0, rms_sample_counter);
         for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
             auto* channel_buf = channel_data[ch_ix];
             auto& chs = channel_states[ch_ix];
@@ -94,6 +136,8 @@ struct EngineImpl : public Engine {
             }
             chs.gain = gain; // The latest gain.
         }
+        rms_sample_counter = measure_rms(output_rms, 1, rms_sample_counter);
+        NOP;
     }
     std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) override
     {
@@ -128,9 +172,17 @@ struct EngineImpl : public Engine {
             update_gain_filter_pars();
         }
     }
-    TransferCurveState get_transfer_curve_state() const override
+    [[nodiscard]] TransferCurveState get_transfer_curve_state() const override
     {
         return transfer_curve.get_state();
+    }
+    [[nodiscard]] float get_rms_sample_period_sec() const override
+    {
+        return ffcast<float>(rms_sample_counter_period / sample_rate);
+    }
+    [[nodiscard]] const std::vector<AF2>& get_rms_samples_of_last_block() const override
+    {
+        return rms_samples;
     }
 };
 

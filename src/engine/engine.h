@@ -34,7 +34,9 @@ public:
     virtual void set_release_ms(float ms) = 0;
     virtual void set_gain_control_application(GainControlApplication application) = 0;
 
-    virtual TransferCurveState get_transfer_curve_state() const = 0;
+    [[nodiscard]] virtual TransferCurveState get_transfer_curve_state() const = 0;
+    [[nodiscard]] virtual float get_rms_sample_period_sec() const = 0;
+    [[nodiscard]] virtual const std::vector<AF2>& get_rms_samples_of_last_block() const = 0;
 };
 
 std::unique_ptr<Engine> make_engine();

@@ -29,25 +29,43 @@ Some non-tracked dirs:
 
 Avoid platform-specific code whenever possible.
 
+### Numeric conversion
+
 The project has many C++ warnings enabled as errors (see clang_warnings.cmake) including
 numeric conversion warnings. To silence the numeric conversion warnings, instead of
 `static_cast` use the following custom functions (defined in <meadow/cppext.h>):
 
-### Sign conversion
+#### Sign conversion
 
 Use sucast() and uscast() to convert between unsigned and signed types of the same size.
 
-### Integer -> integer
+#### Integer -> integer
 
 Use iicast<target-integer-type>() to narrow.
 
-### float -> integer
+#### float -> integer
 
 Use iround<integer-type>, ifloor<integer-type> or iceil<integer-type>.
 
-### float -> double
+#### float -> double
 
 Use ffcast<float> to cast from double to float.
+
+### Include order and style
+
+```
+#include "corresponding_header.h"
+
+#include "headers_of_same_target.h"
+
+#include "headers_from_this_project.h"
+
+#include <third_party_headers.h>
+
+#include <c++_standard_library_headers>
+
+#include <c_standard_library_headers.h>
+```
 
 ## CMake hints
 

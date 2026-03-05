@@ -11,7 +11,7 @@
 
 class SpringCompressorProcessor
     : public juce::AudioProcessor
-    , private juce::AudioProcessorValueTreeState::Listener
+    , juce::AudioProcessorValueTreeState::Listener
 {
 public:
     SpringCompressorProcessor();

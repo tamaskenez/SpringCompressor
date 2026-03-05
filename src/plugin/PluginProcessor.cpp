@@ -3,6 +3,7 @@
 #include "PluginEditor.h"
 #include "engine.h"
 #include "meadow/math.h"
+#include "meadow/matlab.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
@@ -13,7 +14,13 @@
 namespace
 {
 constexpr int k_ui_refresh_timer_ms = 33;
-}
+
+struct RmsSamples {
+    // Each AF2 item contains an input and corresponding output RMS value.
+    std::inplace_vector<AF2, 16> samples;
+};
+
+} // namespace
 
 SpringCompressorProcessor::SpringCompressorProcessor()
     : AudioProcessor(
@@ -152,11 +159,6 @@ const std::vector<juce::String> k_transfer_curve_parameters = {
 
 void SpringCompressorProcessor::update_ui_with_transfer_curve_update_result(const TransferCurveState& tcur)
 {
-    println(
-      "[update_ui_with_transfer_curve_update_result]: makeup: {}, reference_level: {}",
-      tcur.makeup_gain_db,
-      tcur.reference_level_db
-    );
     ignore_parameter_changed = true;
     {
         auto* p = apvts.getParameter("makeup");
@@ -266,7 +268,20 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     auto read_pointers = std::span(input_buffer.getArrayOfReadPointers(), num_channels);
     auto write_pointers = std::span(output_buffer.getArrayOfWritePointers(), num_channels);
     assert(std::ranges::equal(read_pointers, write_pointers));
+
     engine->process_block(write_pointers, buffer.getNumSamples());
+
+    RmsSamples msg;
+    for (auto& s : engine->get_rms_samples_of_last_block()) {
+        msg.samples.push_back(s);
+        if (msg.samples.size() == decltype(msg.samples)::capacity()) {
+            audio_to_ui_queue.enqueue(msg);
+            msg.samples.clear();
+        }
+    }
+    if (!msg.samples.empty()) {
+        audio_to_ui_queue.enqueue(msg);
+    }
 }
 
 juce::AudioProcessorEditor* SpringCompressorProcessor::createEditor()
@@ -296,6 +311,8 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
     while (audio_to_ui_queue.try_dequeue(msg)) {
         if (auto* tcur = std::any_cast<TransferCurveState>(&msg)) {
             update_ui_with_transfer_curve_update_result(*tcur);
+        } else if (auto* rms_samples = std::any_cast<RmsSamples>(&msg)) {
+            // TODO: draw the data from rms_samples.msg on the UI.
         } else {
             assert(false);
         }
