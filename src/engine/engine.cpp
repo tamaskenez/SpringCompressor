@@ -10,6 +10,8 @@
 #include <cassert>
 #include <vector>
 
+//#define DO_LOG
+
 namespace
 {
 constexpr double k_rms_detector_time_constant_sec = 1 / (2 * std::numbers::pi * 2.1);
@@ -43,15 +45,7 @@ struct EngineImpl : public Engine {
         // Note: this might be called on audio thread.
         for (auto& chs : channel_states) {
             chs.gain_filter.set_critically_damped_with_time_constant(attack_ms / 1000, release_ms / 1000);
-            switch (gain_control_application) {
-            case GainControlApplication::on_squared_input:
-            case GainControlApplication::on_gr_db:
-                chs.gain_filter.set_state(0.0, 0.0);
-                break;
-            case GainControlApplication::on_gr_mag:
-                chs.gain_filter.set_state(1.0, 0.0);
-                break;
-            }
+            chs.gain_filter.set_state(0.0, 0.0);
         }
     }
 
@@ -126,7 +120,7 @@ struct EngineImpl : public Engine {
                 case GainControlApplication::on_gr_db: {
                     const auto input_db = matlab::mag2db(abs(input_sample));
                     const auto gain_db = transfer_curve.gain_db_for_input_db(input_db);
-                    const auto smoothed_gain_db = gf.process(gain_db);
+                    const auto smoothed_gain_db = -gf.process(-gain_db);
 #ifdef DO_LOG
                     if (ch_ix == 0) {
                         log.push_back(AD3{input_db, gain_db, smoothed_gain_db});
@@ -136,7 +130,7 @@ struct EngineImpl : public Engine {
                 } break;
                 case GainControlApplication::on_gr_mag: {
                     const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
-                    const auto smoothed_gain = gf.process(matlab::db2mag(gain_db));
+                    const auto smoothed_gain = 1 - gf.process(1 - matlab::db2mag(gain_db));
                     gain = std::max(0.0, smoothed_gain);
                 } break;
                 }

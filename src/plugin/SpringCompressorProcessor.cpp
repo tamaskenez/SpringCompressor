@@ -28,7 +28,7 @@ const std::filesystem::path k_test_signal_path =
 #ifdef NDEBUG
   ""
 #else
-  PROJECT_SOURCE_DIR "/matlab/test_signal.wav"
+  PROJECT_SOURCE_DIR "/matlab/test_signal_sine_1k_amp_60_0_db.wav"
 #endif
   ;
 } // namespace
@@ -290,6 +290,16 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     auto read_pointers = std::span(input_buffer.getArrayOfReadPointers(), num_channels);
     auto write_pointers = std::span(output_buffer.getArrayOfWritePointers(), num_channels);
     assert(std::ranges::equal(read_pointers, write_pointers));
+
+    if (k_play_test_signal && !test_signal.empty()) {
+        for (int i = 0; i < buffer.getNumSamples();
+             ++i, test_signal_playhead = (test_signal_playhead + 1) % test_signal.size()) {
+            const auto input_sample = test_signal[test_signal_playhead];
+            for (int c = 0; c < uscast(num_channels); ++c) {
+                output_buffer.setSample(c, i, input_sample);
+            }
+        }
+    }
 
     engine->process_block(write_pointers, buffer.getNumSamples());
 
