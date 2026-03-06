@@ -3,7 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "JuceTimer.h"
-#include "PluginProcessor.h"
+#include "SpringCompressorProcessor.h"
 #include "TransferCurveComponent.h"
 
 class SpringCompressorEditor : public juce::AudioProcessorEditor

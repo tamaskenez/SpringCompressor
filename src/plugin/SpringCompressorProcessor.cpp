@@ -1,6 +1,6 @@
-#include "PluginProcessor.h"
+#include "SpringCompressorProcessor.h"
 
-#include "PluginEditor.h"
+#include "SpringCompressorEditor.h"
 #include "TransferCurveComponent.h"
 #include "engine.h"
 

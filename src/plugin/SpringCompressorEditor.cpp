@@ -1,4 +1,4 @@
-#include "PluginEditor.h"
+#include "SpringCompressorEditor.h"
 
 SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
     : AudioProcessorEditor(&p)
