@@ -32,7 +32,6 @@ struct EngineImpl : public Engine {
 
     float attack_ms = 10.0f;
     float release_ms = 100.0f;
-    float makeup_gain = 1.0f;
     GainControlApplication gain_control_application = GainControlApplication::on_gr_db;
     RmsDetector input_rms, output_rms;
     int rms_sample_counter = 0;
@@ -108,6 +107,10 @@ struct EngineImpl : public Engine {
             return sample_counter;
         };
         measure_rms(input_rms, 0, rms_sample_counter);
+#ifdef DO_LOG
+        static vector<AD3> log;
+        log.clear();
+#endif
         for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
             auto* channel_buf = channel_data[ch_ix];
             auto& chs = channel_states[ch_ix];
@@ -121,8 +124,14 @@ struct EngineImpl : public Engine {
                     gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::pow2db(smoothed_signal_power)));
                 } break;
                 case GainControlApplication::on_gr_db: {
-                    const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
+                    const auto input_db = matlab::mag2db(abs(input_sample));
+                    const auto gain_db = transfer_curve.gain_db_for_input_db(input_db);
                     const auto smoothed_gain_db = gf.process(gain_db);
+#ifdef DO_LOG
+                    if (ch_ix == 0) {
+                        log.push_back(AD3{input_db, gain_db, smoothed_gain_db});
+                    }
+#endif
                     gain = matlab::db2mag(smoothed_gain_db);
                 } break;
                 case GainControlApplication::on_gr_mag: {
@@ -131,12 +140,23 @@ struct EngineImpl : public Engine {
                     gain = std::max(0.0, smoothed_gain);
                 } break;
                 }
-                channel_buf[i] = ffcast<float>(input_sample * gain * makeup_gain);
+                channel_buf[i] = ffcast<float>(input_sample * gain);
             }
             chs.gain = gain; // The latest gain.
         }
+#ifdef DO_LOG
+        {
+            FILE* f = fopen("/Users/tamas/tmp/log.m", "wt");
+            assert(f);
+            println(f, "A = [");
+            for (const auto& l : log) {
+                println(f, "\t{} {} {}", l[0], l[1], l[2]);
+            }
+            println(f, "];");
+            fclose(f);
+        }
+#endif
         rms_sample_counter = measure_rms(output_rms, 1, rms_sample_counter);
-        NOP;
     }
     std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) override
     {
@@ -156,13 +176,17 @@ struct EngineImpl : public Engine {
     }
     void set_attack_ms(float ms) override
     {
-        attack_ms = ms;
-        update_gain_filter_pars();
+        if (attack_ms != ms) {
+            attack_ms = ms;
+            update_gain_filter_pars();
+        }
     }
     void set_release_ms(float ms) override
     {
-        release_ms = ms;
-        update_gain_filter_pars();
+        if (release_ms != ms) {
+            release_ms = ms;
+            update_gain_filter_pars();
+        }
     }
     void set_gain_control_application(GainControlApplication application) override
     {
