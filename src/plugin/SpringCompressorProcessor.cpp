@@ -335,10 +335,12 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
                     && in_cc_range(
                       output_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1
                     )) {
-                    const auto xy = AI2{
-                      iround<int>(input_db) - TransferCurveComponent::k_db_min,
-                      iround<int>(output_db) - TransferCurveComponent::k_db_min
+                    const auto db_to_index = [](float db) {
+                        constexpr int M = 1;
+                        const int db_int = iround<int>(db);
+                        return db_int - modulo(db_int, M) - TransferCurveComponent::k_db_min;
                     };
+                    const auto xy = AI2{db_to_index(input_db), db_to_index(output_db)};
                     if (in_co_range(xy[0], 0, k_rms_matrix_size) && in_co_range(xy[1], 0, k_rms_matrix_size)) {
                         rms_matrix_as_mdspan[xy[0], xy[1]] = rms_matrix_clock;
                     }

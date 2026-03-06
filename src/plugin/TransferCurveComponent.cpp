@@ -2,6 +2,8 @@
 
 #include <meadow/cppext.h>
 
+#include <climits>
+
 void TransferCurveComponent::set_transfer_curve(const TransferCurveState& r)
 {
     transfer_curve_state = r;
@@ -97,15 +99,61 @@ void TransferCurveComponent::update_rms_dots(
   int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
 )
 {
-    // TODO: redraw the rms_overlay from rms_matrix:
-    // Each item rms_matrix[x][y] means that there is a sample with
-    // `input_rms_db = k_min_db + x` and `output_rms_db = k_min_db + y` and whose age is
-    // `rms_matrix_clock - rms_matrix[x][y]`
-    // In the overlay, draw a dot with an intensity that is inversely proportional to age.
-    // For now, the simple solution would something like this:
-    // `intensity = max((max_age - age) / max_age, 0)`
-    // The dot should be 2D gaussian bump.
-    (void)rms_matrix_clock;
-    (void)rms_matrix;
-    (void)rms_sample_period_sec;
+    const int w = rms_overlay.getWidth();
+    const int h = rms_overlay.getHeight();
+    if (w == 0 || h == 0)
+        return;
+
+    constexpr double k_max_dot_age_sec = 0.1;
+    const float max_age_ticks = ffcast<float>(k_max_dot_age_sec / rms_sample_period_sec);
+
+    constexpr float sigma = ifcast<float>(k_pixel_per_db);
+    constexpr float two_sigma_sq = 2.f * sigma * sigma;
+    constexpr int radius = 3 * k_pixel_per_db;
+    constexpr int ksize = 2 * radius + 1;
+
+    static const auto kernel = []() {
+        std::array<float, ksize * ksize> k{};
+        for (int dy = -radius; dy <= radius; ++dy)
+            for (int dx = -radius; dx <= radius; ++dx)
+                k[ucast((dy + radius) * ksize + (dx + radius))] =
+                  std::exp(-ifcast<float>(dx * dx + dy * dy) / two_sigma_sq);
+        return k;
+    }();
+
+    const int n = rms_matrix.extent(0);
+    std::vector<float> buf(ucast(w * h), 0.f);
+
+    for (int mx = 0; mx < n; ++mx) {
+        for (int my = 0; my < n; ++my) {
+            const int stamp = rms_matrix[mx, my];
+            if (stamp == INT_MIN)
+                continue;
+
+            const float age = ifcast<float>(rms_matrix_clock - stamp);
+            const float intensity = std::max(0.f, (max_age_ticks - age) / max_age_ticks);
+            if (intensity <= 0.f)
+                continue;
+
+            const int cx = mx * k_pixel_per_db;
+            const int cy = h - my * k_pixel_per_db;
+
+            const int dy_min = std::max(-radius, -cy);
+            const int dy_max = std::min(radius, h - 1 - cy);
+            const int dx_min = std::max(-radius, -cx);
+            const int dx_max = std::min(radius, w - 1 - cx);
+
+            for (int dy = dy_min; dy <= dy_max; ++dy)
+                for (int dx = dx_min; dx <= dx_max; ++dx)
+                    buf[ucast((cy + dy) * w + cx + dx)] +=
+                      intensity * kernel[ucast((dy + radius) * ksize + (dx + radius))];
+        }
+    }
+
+    juce::Image::BitmapData bm(rms_overlay, juce::Image::BitmapData::writeOnly);
+    for (int py = 0; py < h; ++py)
+        for (int px = 0; px < w; ++px)
+            bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, buf[ucast(py * w + px)])));
+
+    repaint();
 }
