@@ -19,6 +19,9 @@ public:
     void set_transfer_curve(const TransferCurveState& r);
     void paint(juce::Graphics&) override;
     void resized() override;
+    void update_rms_dots(
+      int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
+    );
 
 private:
     std::optional<TransferCurveState> transfer_curve_state;

@@ -74,6 +74,7 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    std::atomic<bool> editor_open{false};
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -91,6 +92,12 @@ private:
     bool audio_thread_running = false;
     juce::String program0_name = "program#0";
     bool ignore_parameter_changed = false;
+
+    int rms_matrix_clock = 0; // Incremented by one on each incoming rms sample.
+    // Each incoming rms sample will update the corresponding element in the rms_matrix with the current
+    // rms_matrix_clock. The age of an element can be computed by `rms_matrix_clock - element_value`
+    std::vector<int> rms_matrix;
+    std::mdspan<int, std::dextents<int, 2>> rms_matrix_as_mdspan;
 
     JuceTimer ui_refresh_timer;
 

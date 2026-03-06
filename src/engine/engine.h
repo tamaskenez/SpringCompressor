@@ -7,6 +7,8 @@
 #include <span>
 #include <vector>
 
+constexpr double k_rms_sample_period_sec = 0.001;
+
 struct TransferCurvePars;
 
 enum class GainControlApplication {

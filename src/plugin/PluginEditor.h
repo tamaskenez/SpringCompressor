@@ -10,12 +10,18 @@ class SpringCompressorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit SpringCompressorEditor(SpringCompressorProcessor&);
-    ~SpringCompressorEditor() override = default;
+    ~SpringCompressorEditor() override
+    {
+        processorRef.editor_open = false;
+    }
 
     void paint(juce::Graphics&) override;
     void resized() override;
 
     void set_transfer_curve(const TransferCurveState& tcur);
+    void update_rms_dots(
+      int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
+    );
 
 private:
     SpringCompressorProcessor& processorRef;

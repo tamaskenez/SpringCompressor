@@ -12,7 +12,6 @@
 
 namespace
 {
-constexpr double k_rms_sample_period_sec = 0.001;
 constexpr double k_rms_detector_time_constant_sec = 1 / (2 * std::numbers::pi * 2.1);
 } // namespace
 

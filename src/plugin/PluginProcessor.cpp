@@ -1,12 +1,13 @@
 #include "PluginProcessor.h"
 
 #include "PluginEditor.h"
+#include "TransferCurveComponent.h"
 #include "engine.h"
-#include "meadow/math.h"
-#include "meadow/matlab.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
+#include <meadow/math.h>
+#include <meadow/matlab.h>
 
 #include <cassert>
 #include <span>
@@ -14,7 +15,9 @@
 namespace
 {
 constexpr int k_ui_refresh_timer_ms = 33;
-
+constexpr int k_rms_matrix_size = TransferCurveComponent::k_db_max - TransferCurveComponent::k_db_min + 1;
+constexpr double k_max_rms_dot_age_sec = 3;
+const int k_max_rms_dot_age_ticks = iround<int>(k_max_rms_dot_age_sec / k_rms_sample_period_sec);
 struct RmsSamples {
     // Each AF2 item contains an input and corresponding output RMS value.
     std::inplace_vector<AF2, 16> samples;
@@ -39,9 +42,17 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .reference_level_db = apvts.getRawParameterValue("reference_level"),
         .knee_width_db = apvts.getRawParameterValue("knee_width"),
         .gain_control_application = apvts.getRawParameterValue("gain_filter")
-      },
-ui_refresh_timer([this](){on_ui_refresh_timer_elapsed();})
+    }
+    , rms_matrix(square(k_rms_matrix_size), INT_MIN)
+    , rms_matrix_as_mdspan(rms_matrix.data(), k_rms_matrix_size, k_rms_matrix_size)
+    , ui_refresh_timer([this]() {
+        on_ui_refresh_timer_elapsed();
+    })
 {
+    assert(cmp_equal(
+      &(rms_matrix_as_mdspan[k_rms_matrix_size - 1, k_rms_matrix_size - 1]) - rms_matrix.data() + 1, rms_matrix.size()
+    ));
+
     for (auto* id :
          {"threshold", "ratio", "attack", "release", "makeup", "reference_level", "knee_width", "gain_filter"})
         apvts.addParameterListener(id, this);
@@ -271,21 +282,24 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     engine->process_block(write_pointers, buffer.getNumSamples());
 
-    RmsSamples msg;
-    for (auto& s : engine->get_rms_samples_of_last_block()) {
-        msg.samples.push_back(s);
-        if (msg.samples.size() == decltype(msg.samples)::capacity()) {
-            audio_to_ui_queue.enqueue(msg);
-            msg.samples.clear();
+    if (editor_open) {
+        RmsSamples msg;
+        for (auto& s : engine->get_rms_samples_of_last_block()) {
+            msg.samples.push_back(s);
+            if (msg.samples.size() == decltype(msg.samples)::capacity()) {
+                audio_to_ui_queue.enqueue(msg);
+                msg.samples.clear();
+            }
         }
-    }
-    if (!msg.samples.empty()) {
-        audio_to_ui_queue.enqueue(msg);
+        if (!msg.samples.empty()) {
+            audio_to_ui_queue.enqueue(msg);
+        }
     }
 }
 
 juce::AudioProcessorEditor* SpringCompressorProcessor::createEditor()
 {
+    editor_open = true;
     auto* editor = new SpringCompressorEditor(*this);
     editor->set_transfer_curve(engine->get_transfer_curve_state());
     return editor;
@@ -308,14 +322,50 @@ void SpringCompressorProcessor::setStateInformation(const void* data, int sizeIn
 void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
 {
     std::any msg;
+    bool rms_matrix_updated = false;
     while (audio_to_ui_queue.try_dequeue(msg)) {
         if (auto* tcur = std::any_cast<TransferCurveState>(&msg)) {
             update_ui_with_transfer_curve_update_result(*tcur);
         } else if (auto* rms_samples = std::any_cast<RmsSamples>(&msg)) {
-            // TODO: draw the data from rms_samples.msg on the UI.
-            (void)rms_samples;
+            rms_matrix_updated |= !rms_samples->samples.empty();
+            for (auto rs : rms_samples->samples) {
+                const auto input_db = matlab::mag2db(rs[0]);
+                const auto output_db = matlab::mag2db(rs[1]);
+                if (in_cc_range(input_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1)
+                    && in_cc_range(
+                      output_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1
+                    )) {
+                    const auto xy = AI2{
+                      iround<int>(input_db) - TransferCurveComponent::k_db_min,
+                      iround<int>(output_db) - TransferCurveComponent::k_db_min
+                    };
+                    if (in_co_range(xy[0], 0, k_rms_matrix_size) && in_co_range(xy[1], 0, k_rms_matrix_size)) {
+                        rms_matrix_as_mdspan[xy[0], xy[1]] = rms_matrix_clock;
+                    }
+                }
+                ++rms_matrix_clock;
+            }
+            // Maintenance: periodically decrease all timestamps and the clock to prevent overflow.
+            if (rms_matrix_clock >= k_max_rms_dot_age_ticks) {
+                for (auto& x : rms_matrix) {
+                    if (x < 0) {
+                        x = INT_MIN;
+                    } else {
+                        x -= rms_matrix_clock;
+                    }
+                }
+                rms_matrix_clock = 0;
+            }
         } else {
+            // We got a message with an unexpected type.
             assert(false);
+        }
+    }
+    if (rms_matrix_updated) {
+        if (auto* editor = this->getActiveEditor()) {
+            dynamic_cast<SpringCompressorEditor*>(editor)->update_rms_dots(
+              rms_matrix_clock, rms_matrix_as_mdspan, k_rms_sample_period_sec
+            );
         }
     }
 }

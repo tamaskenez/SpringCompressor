@@ -2,9 +2,6 @@
 
 #include <meadow/cppext.h>
 
-#include <cmath>
-#include <magic_enum/magic_enum.hpp>
-
 void TransferCurveComponent::set_transfer_curve(const TransferCurveState& r)
 {
     transfer_curve_state = r;
@@ -94,4 +91,21 @@ void TransferCurveComponent::paint(juce::Graphics& g)
 
     g.setOpacity(1.0f);
     g.drawImageAt(rms_overlay, 0, 0);
+}
+
+void TransferCurveComponent::update_rms_dots(
+  int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
+)
+{
+    // TODO: redraw the rms_overlay from rms_matrix:
+    // Each item rms_matrix[x][y] means that there is a sample with
+    // `input_rms_db = k_min_db + x` and `output_rms_db = k_min_db + y` and whose age is
+    // `rms_matrix_clock - rms_matrix[x][y]`
+    // In the overlay, draw a dot with an intensity that is inversely proportional to age.
+    // For now, the simple solution would something like this:
+    // `intensity = max((max_age - age) / max_age, 0)`
+    // The dot should be 2D gaussian bump.
+    (void)rms_matrix_clock;
+    (void)rms_matrix;
+    (void)rms_sample_period_sec;
 }

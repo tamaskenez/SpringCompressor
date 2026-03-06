@@ -79,3 +79,10 @@ void SpringCompressorEditor::set_transfer_curve(const TransferCurveState& tcur)
 {
     transfer_curve_component.set_transfer_curve(tcur);
 }
+
+void SpringCompressorEditor::update_rms_dots(
+  int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
+)
+{
+    transfer_curve_component.update_rms_dots(rms_matrix_clock, rms_matrix, rms_sample_period_sec);
+}
