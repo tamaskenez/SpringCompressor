@@ -104,12 +104,12 @@ void TransferCurveComponent::update_rms_dots(
     if (w == 0 || h == 0)
         return;
 
-    constexpr double k_max_dot_age_sec = 0.1;
+    constexpr double k_max_dot_age_sec = 0.5;
     const float max_age_ticks = ffcast<float>(k_max_dot_age_sec / rms_sample_period_sec);
 
-    constexpr float sigma = ifcast<float>(k_pixel_per_db);
+    constexpr float sigma = ifcast<float>(k_pixel_per_db) * 0.75;
     constexpr float two_sigma_sq = 2.f * sigma * sigma;
-    constexpr int radius = 3 * k_pixel_per_db;
+    constexpr int radius = 4 * k_pixel_per_db;
     constexpr int ksize = 2 * radius + 1;
 
     static const auto kernel = []() {
@@ -151,9 +151,14 @@ void TransferCurveComponent::update_rms_dots(
     }
 
     juce::Image::BitmapData bm(rms_overlay, juce::Image::BitmapData::writeOnly);
-    for (int py = 0; py < h; ++py)
-        for (int px = 0; px < w; ++px)
-            bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, buf[ucast(py * w + px)])));
-
+    constexpr int M = 2;
+    constexpr int raster_grid_size = M * k_pixel_per_db;
+    for (int py = 0; py < h; ++py) {
+        const bool y_grid = (py + raster_grid_size / 2) % raster_grid_size == 0;
+        for (int px = 0; px < w; ++px) {
+            float m = y_grid || ((px + raster_grid_size / 2) % raster_grid_size == 0) ? 0.4f : 1.0f;
+            bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, m * buf[ucast(py * w + px)])));
+        }
+    }
     repaint();
 }
