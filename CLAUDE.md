@@ -29,6 +29,14 @@ Some non-tracked dirs:
 
 Avoid platform-specific code whenever possible.
 
+### Architecture
+
+The JUCE framework pushes towards a certain relationship between AudioProcessor and AudioProcessorEditor:
+The AudioProcessorEditor knows about the concrete AudioProcessor while the AudioProcessor is discouraged
+to even talk to the generic AudioProcessorEditor. This makes the AudioProcessorEditor higher level.
+
+In our case we push against this approach and prefer the AudioProcessor be higher-level and the one that knows about the other.
+
 ### Numeric conversion
 
 The project has many C++ warnings enabled as errors (see clang_warnings.cmake) including
