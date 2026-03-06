@@ -39,3 +39,7 @@ target_link_libraries(SpringCompressor
 
 target_precompile_headers(SpringCompressor PRIVATE pch.h)
 
+set_source_files_properties(SpringCompressorProcessor.cpp
+    PROPERTIES COMPILE_DEFINITIONS "PROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\""
+)
+

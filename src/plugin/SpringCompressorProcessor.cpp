@@ -3,6 +3,7 @@
 #include "SpringCompressorEditor.h"
 #include "TransferCurveComponent.h"
 #include "engine.h"
+#include "util.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
@@ -22,7 +23,14 @@ struct RmsSamples {
     // Each AF2 item contains an input and corresponding output RMS value.
     std::inplace_vector<AF2, 16> samples;
 };
-
+constexpr bool k_play_test_signal = false;
+const std::filesystem::path k_test_signal_path =
+#ifdef NDEBUG
+  ""
+#else
+  PROJECT_SOURCE_DIR "/matlab/test_signal.wav"
+#endif
+  ;
 } // namespace
 
 SpringCompressorProcessor::SpringCompressorProcessor()
@@ -144,6 +152,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
 
 void SpringCompressorProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    if (k_play_test_signal) {
+        test_signal = load_audio_file_first_channel(k_test_signal_path).value().first;
+    }
     engine->prepare_to_play(sampleRate, samplesPerBlock, getTotalNumInputChannels());
     audio_thread_running = true;
 }

@@ -99,6 +99,9 @@ private:
     std::vector<int> rms_matrix;
     std::mdspan<int, std::dextents<int, 2>> rms_matrix_as_mdspan;
 
+    std::vector<float> test_signal;
+    size_t test_signal_playhead = 0;
+
     JuceTimer ui_refresh_timer;
 
     void parameterChanged(const juce::String&, float) override;
