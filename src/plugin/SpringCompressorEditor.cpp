@@ -1,15 +1,17 @@
 #include "SpringCompressorEditor.h"
 
-SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
+SpringCompressorEditor::SpringCompressorEditor(
+  juce::AudioProcessor& p, std::atomic<bool>& editor_open_arg, juce::AudioProcessorValueTreeState& apvts
+)
     : AudioProcessorEditor(&p)
-    , processorRef(p)
-    , thresholdAttachment(p.apvts, "threshold", thresholdSlider)
-    , ratioAttachment(p.apvts, "ratio", ratioSlider)
-    , attackAttachment(p.apvts, "attack", attackSlider)
-    , releaseAttachment(p.apvts, "release", releaseSlider)
-    , makeupAttachment(p.apvts, "makeup", makeupSlider)
-    , referenceLevelAttachment(p.apvts, "reference_level", referenceLevelSlider)
-    , kneeWidthAttachment(p.apvts, "knee_width", kneeWidthSlider)
+    , editor_open(editor_open_arg)
+    , thresholdAttachment(apvts, "threshold", thresholdSlider)
+    , ratioAttachment(apvts, "ratio", ratioSlider)
+    , attackAttachment(apvts, "attack", attackSlider)
+    , releaseAttachment(apvts, "release", releaseSlider)
+    , makeupAttachment(apvts, "makeup", makeupSlider)
+    , referenceLevelAttachment(apvts, "reference_level", referenceLevelSlider)
+    , kneeWidthAttachment(apvts, "knee_width", kneeWidthSlider)
 {
     auto setupSlider = [this](juce::Slider& slider, juce::Label& label, const juce::String& text) {
         slider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
@@ -32,10 +34,10 @@ SpringCompressorEditor::SpringCompressorEditor(SpringCompressorProcessor& p)
 
     addAndMakeVisible(transfer_curve_component);
 
-    auto* gain_filter_param = dynamic_cast<juce::AudioParameterChoice*>(p.apvts.getParameter("gain_filter"));
+    auto* gain_filter_param = dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("gain_filter"));
     for (int i = 0; i < gain_filter_param->choices.size(); ++i)
         gainFilterComboBox.addItem(gain_filter_param->choices[i], i + 1);
-    gainFilterAttachment = std::make_unique<ComboBoxAttachment>(p.apvts, "gain_filter", gainFilterComboBox);
+    gainFilterAttachment = std::make_unique<ComboBoxAttachment>(apvts, "gain_filter", gainFilterComboBox);
 
     gainFilterLabel.setText("Gain filter", juce::dontSendNotification);
     gainFilterLabel.setJustificationType(juce::Justification::centred);

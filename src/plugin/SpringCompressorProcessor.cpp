@@ -300,7 +300,7 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 juce::AudioProcessorEditor* SpringCompressorProcessor::createEditor()
 {
     editor_open = true;
-    auto* editor = new SpringCompressorEditor(*this);
+    auto* editor = new SpringCompressorEditor(*this, editor_open, apvts);
     editor->set_transfer_curve(engine->get_transfer_curve_state());
     return editor;
 }

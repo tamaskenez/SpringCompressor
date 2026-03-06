@@ -3,16 +3,17 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "JuceTimer.h"
-#include "SpringCompressorProcessor.h"
 #include "TransferCurveComponent.h"
 
 class SpringCompressorEditor : public juce::AudioProcessorEditor
 {
 public:
-    explicit SpringCompressorEditor(SpringCompressorProcessor&);
+    explicit SpringCompressorEditor(
+      juce::AudioProcessor&, std::atomic<bool>& editor_open_arg, juce::AudioProcessorValueTreeState& apvts
+    );
     ~SpringCompressorEditor() override
     {
-        processorRef.editor_open = false;
+        editor_open.store(false);
     }
 
     void paint(juce::Graphics&) override;
@@ -24,8 +25,7 @@ public:
     );
 
 private:
-    SpringCompressorProcessor& processorRef;
-
+    std::atomic<bool>& editor_open;
     juce::Slider thresholdSlider, ratioSlider, attackSlider, releaseSlider, makeupSlider, referenceLevelSlider,
       kneeWidthSlider;
     juce::Label thresholdLabel, ratioLabel, attackLabel, releaseLabel, makeupLabel, referenceLevelLabel, kneeWidthLabel;
