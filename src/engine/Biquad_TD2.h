@@ -26,6 +26,13 @@ public:
         return y;
     }
 
+    // Set filter state to zero.
+    void reset()
+    {
+        s1 = 0;
+        s2 = 0;
+    }
+
 private:
     double b0 = 0.0, b1 = 0.0, b2 = 0.0;
     double a1 = 0.0, a2 = 0.0;

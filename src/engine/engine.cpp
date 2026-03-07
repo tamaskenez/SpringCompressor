@@ -10,7 +10,7 @@
 #include <cassert>
 #include <vector>
 
-//#define DO_LOG
+// #define DO_LOG
 
 namespace
 {

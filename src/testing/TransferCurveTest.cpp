@@ -57,7 +57,6 @@ TEST(TransferCurve, T1)
         mg = round(mg * 10) / 10;
         tcp.normalizer_db = mg;
         auto r = tc.set(tcp);
-        assert(r->normalizer == TransferCurveNormalizer::reference_level);
-        std::println("{} {} {}\n", mg, r->normalizer_db, tc.gain_db_for_input_db(r->normalizer_db));
+        std::println("{} {} {}\n", mg, r.reference_level_db, tc.gain_db_for_input_db(r.reference_level_db));
     }
 }

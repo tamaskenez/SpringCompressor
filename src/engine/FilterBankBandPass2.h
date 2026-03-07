@@ -20,12 +20,15 @@ public:
 
     // output_samples.size() is expected to be num_filters()
     void process(double input_sample, span<double> output_samples);
+    double process_and_get_total_power(double input_sample);
 
     size_t num_filters() const
     {
         return filters.size();
     }
+    void reset(); // Set all filter states to zero.
 
 private:
     std::vector<Biquad_TDF2> filters;
+    double output_power_normalizer = 1.0;
 };
