@@ -8,7 +8,7 @@
 
 FilterBankBandPass2::FilterBankBandPass2(double freq_lo, double freq_hi, double filters_per_octave, double B)
 {
-    const double half_bw_octaves = 1.0 / (2.0 * filters_per_octave) + B / 2.0;
+    const double half_bw_octaves = B / (2.0 * filters_per_octave);
     for (int k = 0;; ++k) {
         const double fc = freq_lo * std::pow(2.0, ifcast<double>(k) / filters_per_octave);
         if (fc > freq_hi) {
@@ -19,11 +19,7 @@ FilterBankBandPass2::FilterBankBandPass2(double freq_lo, double freq_hi, double 
         if (hi >= 1) {
             break;
         }
-        const auto coeffs = matlab::butter(1, matlab::FilterType::BandPass{lo, hi});
-        assert(coeffs.b.size() == 3 && coeffs.a.size() == 3);
-        filters.emplace_back(
-          std::span<const double, 3>(coeffs.b.data(), 3), std::span<const double, 3>(coeffs.a.data(), 3)
-        );
+        filters.emplace_back(matlab::butter(1, matlab::FilterType::BandPass{lo, hi}));
     }
 #if 0
     // Establish a normalization value for output power.
