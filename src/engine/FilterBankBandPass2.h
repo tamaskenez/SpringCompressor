@@ -12,14 +12,14 @@ public:
     // Initialize the filter bank with 2nd-order butterworth band pass filters.
     // freq_lo and freq_hi are normalized to the Nyquist frequency (MATLAB convention)
     // The first filter is centered on freq_lo. The last filter will be centered on a frequency less or equal to
-    // freq_hi. By default (when B = 1.0) the filters' cutoff frequencies are arranged such that one filter high cutoff
-    // is placed where the next filter's low cutoff is. If B != 1.0 the logarithmic bandwidth of the filter
-    // (log(default_hi/default_lo)) is multiplied by B.
-    FilterBankBandPass2(double freq_lo, double freq_hi, double filters_per_octave, double B = 1.0);
+    // freq_hi.
+    FilterBankBandPass2(double freq_lo, double freq_hi, double filters_per_octave, double Q = 1.0);
+
+    // Return the center frequency of filter `i`.
+    double center_freq(size_t i) const;
 
     // output_samples.size() is expected to be num_filters()
     void process(double input_sample, span<double> output_samples);
-    double process_and_get_total_power(double input_sample);
 
     size_t num_filters() const
     {
@@ -28,6 +28,8 @@ public:
     void reset(); // Set all filter states to zero.
 
 private:
+    double freq_lo;
+    double filters_per_octave;
     std::vector<Biquad_TDF2> filters;
-    double output_power_normalizer = 1.0;
+    double sqrt_output_power_normalizer = 1.0;
 };

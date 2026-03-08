@@ -23,7 +23,7 @@ public:
         a2 = a[2] * inv_a0;
     }
 
-    explicit Biquad_TDF2(const matlab::TransferFunctionCoeffs&& coeffs)
+    explicit Biquad_TDF2(const matlab::TransferFunctionCoeffs& coeffs)
         : Biquad_TDF2(coeffs.b_as_static_span<3>(), coeffs.a_as_static_span<3>())
     {
     }

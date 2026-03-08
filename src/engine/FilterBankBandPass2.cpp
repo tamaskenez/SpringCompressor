@@ -5,51 +5,45 @@
 
 #include <cassert>
 #include <cmath>
+#include <complex>
 
-FilterBankBandPass2::FilterBankBandPass2(double freq_lo, double freq_hi, double filters_per_octave, double B)
+FilterBankBandPass2::FilterBankBandPass2(double freq_lo_arg, double freq_hi, double filters_per_octave_arg, double Q)
+    : freq_lo(freq_lo_arg)
+    , filters_per_octave(filters_per_octave_arg)
 {
-    const double half_bw_octaves = B / (2.0 * filters_per_octave);
-    for (int k = 0;; ++k) {
-        const double fc = freq_lo * std::pow(2.0, ifcast<double>(k) / filters_per_octave);
-        if (fc > freq_hi) {
-            break;
-        }
-        const double lo = fc * std::pow(2.0, -half_bw_octaves);
-        const double hi = fc * std::pow(2.0, +half_bw_octaves);
-        if (hi >= 1) {
-            break;
-        }
-        filters.emplace_back(matlab::butter(1, matlab::FilterType::BandPass{lo, hi}));
+    const auto beta = (1 + sqrt(1 + 4 * square(Q))) / (2 * Q);
+    const auto max_fc = std::min(1 / beta, freq_hi);
+    assert(freq_lo <= max_fc);
+    const auto num_filters = ifloor<size_t>(filters_per_octave * log2(freq_hi / freq_lo)) + 1;
+    filters.reserve(num_filters);
+    // Normalize with the central filter.
+    const double fmiddle = center_freq(num_filters / 2);
+
+    double total_power = 0; // Simulate a sine of freq fmiddle going through all filters.
+
+    for (unsigned k = 0; k < num_filters; ++k) {
+        const double fc = center_freq(k);
+        assert(fc <= freq_hi);
+        const double hi = fc * beta;
+        assert(hi <= 1);
+        const auto coeffs = matlab::butter(1, matlab::FilterType::BandPass{fc / beta, hi});
+        filters.emplace_back(coeffs);
+        total_power += norm(matlab::freqz(coeffs.b, coeffs.a, fmiddle * num::pi));
     }
-#if 0
-    // Establish a normalization value for output power.
-    double output_power = process_and_get_total_power(1.0);
-    for (;;) {
-        const double o = process_and_get_total_power(0.0);
-        if (o < 1e-17) {
-            break;
-        }
-        output_power += o;
-    }
-    output_power_normalizer = 1.0 / output_power;
-#endif
+    sqrt_output_power_normalizer = sqrt(1.0 / total_power);
+}
+
+double FilterBankBandPass2::center_freq(size_t i) const
+{
+    return freq_lo * std::pow(2.0, ifcast<double>(i) / filters_per_octave);
 }
 
 void FilterBankBandPass2::process(double input_sample, span<double> output_samples)
 {
     assert(output_samples.size() == filters.size());
     for (size_t i = 0; i < filters.size(); ++i) {
-        output_samples[i] = filters[i].process(input_sample);
+        output_samples[i] = sqrt_output_power_normalizer * filters[i].process(input_sample);
     }
-}
-
-double FilterBankBandPass2::process_and_get_total_power(double input_sample)
-{
-    double power = 0.0;
-    for (auto& f : filters) {
-        power += square(f.process(input_sample));
-    }
-    return power * output_power_normalizer;
 }
 
 void FilterBankBandPass2::reset()
