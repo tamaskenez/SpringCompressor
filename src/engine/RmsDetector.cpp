@@ -5,14 +5,31 @@
 
 #include <cmath>
 
-RmsDetector::RmsDetector(double sample_rate, double time_constant_sec)
-    : coeff(std::exp(-1.0 / (sample_rate * time_constant_sec)))
+RmsDetector::RmsDetector(Flavor f, double freq_hps)
 {
+    switch (f) {
+    case Flavor::exponential_moving_average:
+        filter = moving_average_filter_coeff(freq_hps);
+        break;
+    case Flavor::second_order_critically_damped:
+        filter = Biquad_TDF2(critically_damped_second_order_lowpass(freq_hps));
+        break;
+    }
 }
 
-void RmsDetector::process(float f)
+float RmsDetector::process(float f)
 {
-    mean_square = std::lerp(square(ffcast<double>(f)), mean_square, coeff);
+    switch (filter.index()) {
+    case 0:
+        mean_square = std::lerp(square(ffcast<double>(f)), mean_square, std::get<double>(filter));
+        break;
+    case 1:
+        mean_square = std::get<Biquad_TDF2>(filter).process(f);
+        break;
+    default:
+        assert(false);
+    }
+    return ffcast<float>(sqrt(mean_square));
 }
 
 float RmsDetector::get_rms() const

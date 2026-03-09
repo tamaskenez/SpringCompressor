@@ -14,7 +14,7 @@
 
 namespace
 {
-constexpr double k_rms_detector_time_constant_sec = 1 / (2 * std::numbers::pi * 2.1);
+constexpr double k_rms_detector_hz = 2.1;
 } // namespace
 
 struct ChannelState {
@@ -63,8 +63,8 @@ struct EngineImpl : public Engine {
         const auto max_rms_samples_in_block =
           sucast((maxBlockSize + rms_sample_counter_period - 1) / rms_sample_counter_period);
         rms_samples.reserve(max_rms_samples_in_block);
-        input_rms = RmsDetector(sample_rate, k_rms_detector_time_constant_sec);
-        output_rms = RmsDetector(sample_rate, k_rms_detector_time_constant_sec);
+        input_rms = RmsDetector(RmsDetector::Flavor::exponential_moving_average, k_rms_detector_hz / sample_rate * 2);
+        output_rms = input_rms;
     }
 
     void release_resources() override
