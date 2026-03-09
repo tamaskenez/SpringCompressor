@@ -56,6 +56,17 @@ C = x0 - A;
 
 This results in a most gradual transition from R = 1 to R.
 
+## SSL experiment
+
+Tested 100 Hz sine with SSL G-Bus, 10 ms attack, 100 ms release, ratio = 4
+It added odd harmonics, the first being 37 dB lower than the F0.
+For 1000 Hz sine, it was 57 dB lower.
+
+The lower the attack the slower the harmonics envelope decay (more higher order harmonics).
+
+Increasing the release lowers the harmonics envelope.
+The auto release gives somewhat more harmonics.
+
 ## UNUSED CODE
 
 #if 0

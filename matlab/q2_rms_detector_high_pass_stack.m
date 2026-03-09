@@ -4,7 +4,7 @@ Q = 1;
 beta=(1+sqrt(1+4*Q^2))/(2*Q);
 bp_order = 1;
 lp_order = 2;
-lp_K = 1;
+lp_K = 2;
 fs = 48000;
 f0 = 20;
 per_octave = 6;
@@ -38,7 +38,7 @@ mean_G = mean(G);
 lp_bs = zeros(lp_order + 1, max_k + 1);
 lp_as = zeros(lp_order + 1, max_k + 1);
 for k = 0:max_k
-    [b, a] = butter(lp_order, fcs(k+1)/fs*2/lp_K);
+    [b, a] = butter(lp_order, min(fs/4, fcs(k+1)/lp_K)/fs*2);
     lp_bs(:, k+1) = b';
     lp_as(:, k+1) = a';
 end
@@ -57,7 +57,7 @@ for i = 1:4
     ys(:, i) = lp_bp_x;
 end
 
-figure(2);
+figure(1);
 plot(pow2db(ys) - pow2db(mean(x.^2)));
 
 if 0
@@ -87,4 +87,5 @@ end
 
 figure(2);
 m = 1 + 0.3 * ((abs(x)./sqrt(y) - 0.5));
-plot(1:N,x,1:N, x ./ m);
+%plot(1:N,x,1:N, x ./ m);
+plot(1:N,x,1:N, sqrt(y));

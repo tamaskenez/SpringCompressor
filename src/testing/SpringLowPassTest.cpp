@@ -2,9 +2,12 @@
 
 #include "SpringLowPass.h"
 
+#include "Biquad_TD2.h"
+
 #include <cmath>
 #include <fstream>
 #include <numbers>
+#include <span>
 
 TEST(SpringLowPass, always_pass)
 {
@@ -60,4 +63,29 @@ TEST(SpringLowPass, save_steps)
         const double input = (i < 100) ? 1.0 : 0.0;
         file << filter.process(input) << "\n";
     }
+}
+
+TEST(SpringLowPass, compare_to_tustin_critically_damped_lpf)
+{
+    const double fs = 48000;
+    SpringLowPass slp(fs);
+    const double f_hz = 30;
+    slp.set_critically_damped_with_time_constant(1 / (2 * std::numbers::pi * f_hz));
+    std::vector<double> tustin_b = {0.384021890953201e-5, 0.768043781906403e-5, 0.384021890953201e-5};
+    std::vector<double> tustin_a = {1.000000000000000, -1.992161409402673, 0.992176770278311};
+    auto tustin = Biquad_TDF2(std::span<const double, 3>(tustin_b), std::span<const double, 3>(tustin_a));
+    constexpr unsigned N = 1000;
+    std::vector<double> slp_out;
+    std::vector<double> tustin_out;
+    for (unsigned i = 0; i < N; ++i) {
+        const double s = i == 0 ? 1.0 : 0.0;
+        tustin_out.push_back(tustin.process(s));
+        slp_out.push_back(slp.process(s));
+    }
+    FILE* f = fopen("/tmp/slp_tustin.m", "w");
+    std::println(f, "A = [");
+    for (unsigned i = 0; i < N; ++i) {
+        std::println(f, " {} {}", slp_out[i], tustin_out[i]);
+    }
+    std::println(f, "];");
 }
