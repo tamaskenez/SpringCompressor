@@ -9,6 +9,9 @@ void SpringLowPass::Constants::set_critically_damped_with_time_constant(double t
 {
     // For mass=1: ω₀ = √k, critical damping ζ=1 requires c = 2√k.
     // Setting τ = 1/ω₀ gives k = 1/τ², c = 2/τ.
+
+    tau *= sqrt(num::sqrt2 - 1); // Make it normalized to -3 dB instead of -6 dB, at 1/(2*pi*tau)
+
     spring = 1.0 / (tau * tau);
     damping = 2.0 / tau;
 }
