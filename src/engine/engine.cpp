@@ -113,13 +113,16 @@ struct EngineImpl : public Engine {
             for (int i = 0; i < num_samples; ++i) {
                 const double input_sample = channel_buf[i];
                 switch (gain_control_application) {
+                case GainControlApplication::on_abs_input: {
+                    const auto lp_a_x = gf.process(abs(input_sample));
+                    gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::mag2db(lp_a_x)));
+                } break;
                 case GainControlApplication::on_squared_input: {
-                    const auto smoothed_signal_power = gf.process(square(input_sample));
-                    gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::pow2db(smoothed_signal_power)));
+                    const auto lp_sq_x = gf.process(square(input_sample));
+                    gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::pow2db(lp_sq_x)));
                 } break;
                 case GainControlApplication::on_gr_db: {
-                    const auto input_db = matlab::mag2db(abs(input_sample));
-                    const auto gain_db = transfer_curve.gain_db_for_input_db(input_db);
+                    const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
                     const auto smoothed_gain_db = -gf.process(-gain_db);
 #ifdef DO_LOG
                     if (ch_ix == 0) {

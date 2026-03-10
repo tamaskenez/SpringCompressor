@@ -12,6 +12,7 @@ constexpr double k_rms_sample_period_sec = 0.001;
 struct TransferCurvePars;
 
 enum class GainControlApplication {
+    on_abs_input,
     on_squared_input,
     on_gr_db,
     on_gr_mag
