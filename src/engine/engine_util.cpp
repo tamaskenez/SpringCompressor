@@ -7,7 +7,10 @@
 
 double moving_average_filter_coeff(double freq_hps)
 {
-    return std::exp(-std::numbers::pi * freq_hps);
+    // The usual exp(-num::pi * freq_hps) formula gives the same result for
+    // lower frequencies but not exact at higher ones.
+    const auto c = cos(num::pi * freq_hps);
+    return 2 - c - sqrt(square(c - 2) - 1);
 }
 
 ExponentialMovingAverageFilter::ExponentialMovingAverageFilter(double freq_hps)
