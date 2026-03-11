@@ -1,8 +1,22 @@
 # CLAUDE.md
 
+## Directory structure
+
+The _submodules subdirectory contains external dependencies which should not be changed, except for
+_submodules/meadow which is our own project and can be changed.
+
+The following directories are not tracked by git:
+
+- _b: build directory
+- _d: local install dir for dependencies (3rd party libs)
+- _o: test output
+
+Claude should use the `_b` directory for building.
+
 ## Build
 
-Some dependencies are provided by Conan. These needs to be built beforehand. The following script installs conan dependencies, Debug and Release, into the `_d` directory.
+Some dependencies are provided by Conan. These need to be built beforehand. The following script installs Conan
+dependencies, Debug and Release, into the `_d` directory.
 
 ```bash
 ./1_build_conan.sh
@@ -15,19 +29,9 @@ cmake -S . -B _b -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build _b
 ```
 
-## Directory structure
-
-The _submodules subdir contains mostly external projects which should not be changed, except for _submodules/meadow which is our own project and can be changed.
-
-Some non-tracked dirs:
-
-- _b for building
-- _d for dependencies (3rd party libs)
-- _o for test output
-
 ## C++ Guidelines
 
-Avoid platform-specific code whenever possible.
+- Avoid platform-specific code whenever possible.
 
 ### Architecture
 
@@ -37,41 +41,31 @@ to even talk to the generic AudioProcessorEditor. This makes the AudioProcessorE
 
 In our case we push against this approach and prefer the AudioProcessor be higher-level and the one that knows about the other.
 
+### Conventions
+
+Some frequency parameter names are postfixed with "_hps" which means half-cycles per second, that is, normalized to the
+Nyquist frequency (MATLAB convention).
+
 ### Numeric conversion
 
 The project has many C++ warnings enabled as errors (see clang_warnings.cmake) including
 numeric conversion warnings. To silence the numeric conversion warnings, instead of
-`static_cast` use the following custom functions (defined in <meadow/cppext.h>):
+`static_cast` use the following custom functions detailed below (defined in <meadow/cppext.h>). Some of these custom
+casting functions have a debug check and restrict their parameter types.
 
-#### Sign conversion
-
-Use sucast() and uscast() to convert between unsigned and signed types of the same size.
-
-#### Integer -> integer
-
-Use iicast<target-integer-type>() to narrow.
-
-#### float -> integer
-
-Use iround<integer-type>, ifloor<integer-type> or iceil<integer-type>.
-
-#### float -> double
-
-Use ffcast<float> to cast from double to float.
+- Sign conversion: Use sucast() and uscast() to convert between unsigned and signed types of the same size.
+- Integer -> integer: Use iicast<target-integer-type>() to narrow.
+- float -> integer: Use iround<integer-type>, ifloor<integer-type> or iceil<integer-type>.
+- float -> double: Use ffcast<float> to cast from double to float.
 
 ### Include order and style
 
 ```
 #include "corresponding_header.h"
-
 #include "headers_of_same_target.h"
-
 #include "headers_from_this_project.h"
-
 #include <third_party_headers.h>
-
 #include <c++_standard_library_headers>
-
 #include <c_standard_library_headers.h>
 ```
 
