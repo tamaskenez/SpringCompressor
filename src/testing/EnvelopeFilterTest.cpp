@@ -43,25 +43,33 @@ TEST(EnvelopeFilter, T1)
         print(f, "{} ", x);
     }
     println(f);
+    string legend = "'step'";
     for (bool use_power : {true, false}) {
         for (int order : {1, 2}) {
             for (int asymmetric : {0, 1, 2}) {
                 optional<double> attack_time_samples_arg;
+                string label;
                 switch (asymmetric) {
                 case 0:
                     // Not asymmetric.
+                    label = "symm.";
                     break;
                 case 1:
                     // Use asymmetric, but the attack and release times are identical.
                     attack_time_samples_arg = fs / (2.0 * num::pi * release_freq_hz);
+                    label = "assym-same";
                     break;
                 case 2:
                     // Use asymmetric with markedly different attack time.
                     attack_time_samples_arg = attack_time_samples;
+                    label = "assym-diff";
                     break;
                 default:
                     assert(false);
                 }
+                label = format("'O{}/{}/{}'", order, label, use_power ? "pow" : "amp");
+                legend += ", ";
+                legend += label;
                 {
                     auto ef = EnvelopeFilter(use_power, order, attack_time_samples_arg, release_freq_hps);
                     auto samples = step_up_and_down_signal;
@@ -143,5 +151,6 @@ TEST(EnvelopeFilter, T1)
         }
     }
     println(f, "]';");
+    println(f, "L = {{{}}}';", legend);
     fclose(f);
 }
