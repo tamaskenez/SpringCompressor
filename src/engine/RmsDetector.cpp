@@ -9,7 +9,7 @@ RmsDetector::RmsDetector(Flavor f, double freq_hps)
 {
     switch (f) {
     case Flavor::exponential_moving_average:
-        filter = moving_average_filter_coeff(freq_hps);
+        filter = exponential_moving_average_filter_coeff_from_cutoff_freq(freq_hps);
         break;
     case Flavor::second_order_critically_damped:
         filter = Biquad_TDF2(critically_damped_second_order_lowpass(freq_hps));

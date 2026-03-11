@@ -81,10 +81,12 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
 
 ## Coding style
 
-Use snake-case for symbols, except for type use CamelCase.
+- Use snake-case for symbols, except for type use CamelCase.
+- Call `clang-format -i` for *.cpp and *.h files after changing them.
+- When possible, use std::format, std::print, std::println instead of the older, overloaded "<<" operator based techniques.
+- Always put for-loop bodies in curly-braces.
+- The header <meadow/cppext.h> lifts a certain subset of symbols from the std namespace into the global
+  namespace. In this project we can leave out the `std::` prefixes on those core features that should really be part of
+  the language instead of the standard library. This is to reduce line noise in the code.
 
-Call `clang-format -i` for *.cpp and *.h files after changing them.
 
-When possible, use std::format, std::print, std::println instead of the older, overloaded "<<" operator based techniques.
-
-Always put for-loop bodies in curly-braces.

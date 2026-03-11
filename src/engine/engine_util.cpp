@@ -5,7 +5,7 @@
 
 #include <meadow/cppext.h>
 
-double moving_average_filter_coeff(double freq_hps)
+double exponential_moving_average_filter_coeff_from_cutoff_freq(double freq_hps)
 {
     // The usual exp(-num::pi * freq_hps) formula gives the same result for
     // lower frequencies but not exact at higher ones.
@@ -13,14 +13,19 @@ double moving_average_filter_coeff(double freq_hps)
     return 2 - c - sqrt(square(c - 2) - 1);
 }
 
+double exponential_moving_average_filter_coeff_from_time_constant(double time_constant_samples)
+{
+    return exp(-1.0 / time_constant_samples);
+}
+
 ExponentialMovingAverageFilter::ExponentialMovingAverageFilter(double freq_hps)
-    : coeff(moving_average_filter_coeff(freq_hps))
+    : coeff(exponential_moving_average_filter_coeff_from_cutoff_freq(freq_hps))
 {
 }
 
 matlab::TransferFunctionCoeffs exponential_moving_average_filter(double freq_hps)
 {
-    const auto coeff = moving_average_filter_coeff(freq_hps);
+    const auto coeff = exponential_moving_average_filter_coeff_from_cutoff_freq(freq_hps);
     return matlab::TransferFunctionCoeffs{.b = vector<double>({1 - coeff}), .a = vector<double>({1, -coeff})};
 }
 

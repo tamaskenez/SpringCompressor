@@ -1,5 +1,6 @@
 #include "Biquad_TD2.h"
 #include "engine_util.h"
+#include "meadow/math.h"
 #include "meadow/matlab.h"
 
 #include <meadow/cppext.h>
@@ -9,9 +10,19 @@
 
 TEST(engine_util_test, filters)
 {
-    double fs = 48000;
-    double freq_hz = 30.0;
-    double freq_hps = freq_hz / fs * 2;
+    constexpr double fs = 48000;
+    constexpr double freq_hz = 30.0;
+    constexpr double freq_hps = freq_hz / fs * 2;
+
+    {
+        // Check the two ways of calculating EMA filter, for low frequencies they must be nearly identical.
+        const double c1 = exponential_moving_average_filter_coeff_from_cutoff_freq(freq_hps);
+        const double c1_lower = exponential_moving_average_filter_coeff_from_cutoff_freq(1.00001 * freq_hps);
+        ASSERT_LT(c1_lower, c1);
+        const double c2 = exponential_moving_average_filter_coeff_from_time_constant(fs / (2 * num::pi * freq_hz));
+        EXPECT_TRUE(in_cc_range(c2, c1_lower, c1));
+    }
+
     const auto emaf_coeffs = exponential_moving_average_filter(freq_hps);
     const auto cdsolp_coeffs = critically_damped_second_order_lowpass(freq_hps);
     const auto butter2_coeffs = matlab::butter(2, matlab::FilterType::LowPass{freq_hps});

@@ -19,7 +19,10 @@ private:
     double s1 = 0.0;
 };
 
-double moving_average_filter_coeff(double freq_hps);
+// Return the coefficient of the previous output, while the coefficient of the current input sample is one minus this:
+// y[n] = lerp(x[n], y[n-1], coeff);
+double exponential_moving_average_filter_coeff_from_cutoff_freq(double freq_hps);
+double exponential_moving_average_filter_coeff_from_time_constant(double tau_samples);
 
 // `freq_hps` is the -3 dB cutoff frequency, in half-cycles-per-sample (MATLAB convention, Nyquist-normalized)
 matlab::TransferFunctionCoeffs exponential_moving_average_filter(double freq_hps);
