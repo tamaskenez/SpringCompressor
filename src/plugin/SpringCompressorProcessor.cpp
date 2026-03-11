@@ -143,7 +143,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
 
     params.push_back(
       std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID{"gain_filter", 1}, "Gain filter", juce::StringArray{"Input", "GR dB", "Linear GR"}, 1
+        juce::ParameterID{"gain_filter", 1},
+        "Gain filter",
+        juce::StringArray{"Input mag", "Input pow", "GR dB", "GR mag"},
+        1
       )
     );
 
