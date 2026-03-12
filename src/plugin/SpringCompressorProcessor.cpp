@@ -115,7 +115,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
       std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"makeup", 1},
         "Makeup Gain",
-        juce::NormalisableRange<float>(0.0f, 32.0f, 0.1f),
+        juce::NormalisableRange<float>(-32.0f, 32.0f, 0.1f),
         0.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("dB")
       )
@@ -184,21 +184,6 @@ const std::vector<juce::String> k_transfer_curve_parameters = {
 
 void SpringCompressorProcessor::update_ui_with_transfer_curve_update_result(const TransferCurveState& tcur)
 {
-    ignore_parameter_changed = true;
-    {
-        auto* p = apvts.getParameter("makeup");
-        const auto& nr = p->getNormalisableRange();
-        assert(in_cc_range(tcur.makeup_gain_db, nr.start, nr.end));
-        p->setValueNotifyingHost(p->convertTo0to1(std::clamp(tcur.makeup_gain_db, nr.start, nr.end)));
-    }
-    {
-        auto* p = apvts.getParameter("reference_level");
-        const auto& nr = p->getNormalisableRange();
-        assert(in_cc_range(tcur.reference_level_db, nr.start, nr.end));
-        p->setValueNotifyingHost(p->convertTo0to1(std::clamp(tcur.reference_level_db, nr.start, nr.end)));
-    }
-    ignore_parameter_changed = false;
-
     if (auto* editor = this->getActiveEditor()) {
         dynamic_cast<SpringCompressorEditor*>(editor)->set_transfer_curve(tcur);
         editor->repaint();
@@ -212,7 +197,7 @@ void SpringCompressorProcessor::engine_set_transfer_curve_and_update_ui(const Tr
     }
 }
 
-void SpringCompressorProcessor::parameterChanged(const juce::String& name, float f)
+void SpringCompressorProcessor::parameterChanged(const juce::String& name, float)
 {
     if (ignore_parameter_changed) {
         return;
@@ -223,30 +208,12 @@ void SpringCompressorProcessor::parameterChanged(const juce::String& name, float
         return;
     }
 
-    // Use the last normalizer or the one that is being changed now.
-    std::optional<float> normalizer_db;
-    if (name == "makeup") {
-        last_normalizer = TransferCurveNormalizer::makeup_gain;
-        normalizer_db = f;
-    } else if (name == "reference_level") {
-        last_normalizer = TransferCurveNormalizer::reference_level;
-        normalizer_db = f;
-    } else {
-        switch (last_normalizer) {
-        case TransferCurveNormalizer::makeup_gain:
-            normalizer_db = raw_parameter_values.makeup_gain_db->load();
-            break;
-        case TransferCurveNormalizer::reference_level:
-            normalizer_db = raw_parameter_values.reference_level_db->load();
-            break;
-        }
-    }
     const auto tcp = TransferCurvePars{
       .threshold_db = raw_parameter_values.threshold_db->load(),
       .ratio = raw_parameter_values.ratio->load(),
       .knee_width_db = raw_parameter_values.knee_width_db->load(),
-      .normalizer = last_normalizer,
-      .normalizer_db = normalizer_db.value()
+      .makeup_gain_db = raw_parameter_values.makeup_gain_db->load(),
+      .reference_level_db = raw_parameter_values.reference_level_db->load()
     };
 
     if (audio_thread_running) {
@@ -311,6 +278,9 @@ void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         for (auto& s : engine->get_rms_samples_of_last_block()) {
             msg.samples.push_back(s);
             if (msg.samples.size() == decltype(msg.samples)::capacity()) {
+                // TODO: fix unintentional heap allocation (make sure we don't allocate):
+                // we're secretly allocating memory by copying the stack object `msg` into
+                // std::any.
                 audio_to_ui_queue.enqueue(msg);
                 msg.samples.clear();
             }

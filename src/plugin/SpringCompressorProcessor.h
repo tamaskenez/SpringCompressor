@@ -86,7 +86,6 @@ private:
           gain_control_application;
     } raw_parameter_values;
 
-    TransferCurveNormalizer last_normalizer = TransferCurveNormalizer::makeup_gain;
     moodycamel::ReaderWriterQueue<TransferCurvePars> ui_to_audio_queue;
     moodycamel::ReaderWriterQueue<std::any> audio_to_ui_queue;
     bool audio_thread_running = false;
