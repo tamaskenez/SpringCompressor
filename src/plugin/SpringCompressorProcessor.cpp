@@ -91,21 +91,25 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
       )
     );
 
+    auto attack_range = juce::NormalisableRange<float>(0.1f, 200.0f, 0.01f);
+    attack_range.setSkewForCentre(10.0f);
     params.push_back(
       std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"attack", 1},
         "Attack",
-        juce::NormalisableRange<float>(0.1f, 200.0f, 0.1f, 0.5f),
+        attack_range,
         10.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("ms")
       )
     );
 
+    auto release_range = juce::NormalisableRange<float>(1.0f, 2000.0f, 0.1f);
+    release_range.setSkewForCentre(100.0f);
     params.push_back(
       std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{"release", 1},
         "Release",
-        juce::NormalisableRange<float>(1.0f, 2000.0f, 1.0f, 0.5f),
+        release_range,
         100.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("ms")
       )
