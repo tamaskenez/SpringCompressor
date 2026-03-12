@@ -4,10 +4,21 @@
 
 #include <meadow/math.h>
 
-EnvelopeFilter::EnvelopeFilter(
-  bool use_power, int lpf_order, optional<double> attack_time_samples, double release_freq_hps
+template<class IOFloat>
+EnvelopeFilter<IOFloat>::EnvelopeFilter(
+  OutputType output_type_arg, int lpf_order, optional<double> attack_time_samples, double release_freq_hps
 )
+    : output_type(output_type_arg)
 {
+    bool use_power = false;
+    switch (output_type) {
+    case EnvelopeFilterOutputType::amplitude:
+        break;
+    case EnvelopeFilterOutputType::rms:
+    case EnvelopeFilterOutputType::power:
+        use_power = true;
+        break;
+    }
     switch (lpf_order) {
     case 1:
         if (attack_time_samples) {
@@ -64,13 +75,15 @@ EnvelopeFilter::EnvelopeFilter(
     }
 }
 
-void EnvelopeFilter::process(span<float> samples)
+template<class IOFloat>
+void EnvelopeFilter<IOFloat>::process(span<IOFloat> samples)
 {
-    f_process(this, samples);
+    f_process(this, samples, output_type == EnvelopeFilterOutputType::rms);
 }
 
+template<class IOFloat>
 template<bool t_use_power, int t_order, bool t_asymmetric>
-void EnvelopeFilter::t_process(EnvelopeFilter* that, span<float> samples)
+void EnvelopeFilter<IOFloat>::t_process(EnvelopeFilter* that, span<IOFloat> samples, bool take_sqrt)
 {
     // Extract the appropriate type from the variant.
     ExponentialMovingAverage* ema{};
@@ -119,11 +132,15 @@ void EnvelopeFilter::t_process(EnvelopeFilter* that, span<float> samples)
             static_assert(false);
         }
 
-        // Apply sqrt if necessary on the output sample.
-        if constexpr (t_use_power) {
-            x = ffcast<float>(sqrt(y));
-        } else {
-            x = ffcast<float>(y);
+        x = ffcast<IOFloat>(y);
+    }
+    // Apply sqrt if necessary on the output sample.
+    if (take_sqrt) {
+        for (auto& x : samples) {
+            x = sqrt(x);
         }
     }
 }
+
+template class EnvelopeFilter<float>;
+template class EnvelopeFilter<double>;

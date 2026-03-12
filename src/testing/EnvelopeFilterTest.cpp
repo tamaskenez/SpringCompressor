@@ -71,7 +71,12 @@ TEST(EnvelopeFilter, T1)
                 legend += ", ";
                 legend += label;
                 {
-                    auto ef = EnvelopeFilter(use_power, order, attack_time_samples_arg, release_freq_hps);
+                    auto ef = EnvelopeFilter<float>(
+                      use_power ? EnvelopeFilterOutputType::rms : EnvelopeFilterOutputType::amplitude,
+                      order,
+                      attack_time_samples_arg,
+                      release_freq_hps
+                    );
                     auto samples = step_up_and_down_signal;
                     ef.process(samples);
                     for (auto x : samples) {
@@ -131,7 +136,12 @@ TEST(EnvelopeFilter, T1)
                     }
                 }
                 {
-                    auto ef = EnvelopeFilter(use_power, order, attack_time_samples_arg, release_freq_hps);
+                    auto ef = EnvelopeFilter<float>(
+                      use_power ? EnvelopeFilterOutputType::rms : EnvelopeFilterOutputType::amplitude,
+                      order,
+                      attack_time_samples_arg,
+                      release_freq_hps
+                    );
                     auto samples = sine_signal;
                     ef.process(samples);
 

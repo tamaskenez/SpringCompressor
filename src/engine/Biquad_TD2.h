@@ -35,6 +35,12 @@ public:
         s2 = b2 * x - a2 * y;
         return y;
     }
+    void process(std::span<double> xs)
+    {
+        for (auto& x : xs) {
+            x = process(x);
+        }
+    }
 
     // Set filter state to zero.
     void reset()

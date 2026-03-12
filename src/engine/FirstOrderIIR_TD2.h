@@ -31,6 +31,12 @@ public:
         s1 = b1 * x - a1 * y;
         return y;
     }
+    void process(std::span<double> xs)
+    {
+        for (auto& x : xs) {
+            x = process(x);
+        }
+    }
 
     void reset()
     {
