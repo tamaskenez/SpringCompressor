@@ -1,5 +1,6 @@
 #include "RecursiveCrossoverRMSDetector.h"
 
+#include "engine_util.h"
 #include "meadow/math.h"
 
 namespace RecursiveCrossoverRMSDetectorDetail
@@ -59,6 +60,12 @@ RecursiveCrossoverRMSDetector::RecursiveCrossoverRMSDetector(const Pars& pars, s
 
     envelope_filters.reserve(freqs.size());
 
+    optional<double> release_freq_hps_equivalent_of_attack_time;
+    if (pars.low_pass_filter.attack_time_samples) {
+        release_freq_hps_equivalent_of_attack_time =
+          samples_to_freq_hps(*pars.low_pass_filter.attack_time_samples) / (2 * num::pi);
+    }
+
     for (auto freq : freqs) {
         switch (pars.bpf_order) {
         case 1:
@@ -82,13 +89,20 @@ RecursiveCrossoverRMSDetector::RecursiveCrossoverRMSDetector(const Pars& pars, s
         default:
             assert(false);
         }
-        const auto release_freq_hps =
+        auto attack_time_samples = pars.low_pass_filter.attack_time_samples;
+        auto release_freq_hps =
           std::min(freq / pars.low_pass_filter.release_ratio_to_period, pars.max_release_freq_hps);
+
+        // If release time is smaller than attack time (that is, release freq is greater then the freq equivalent of
+        // attack time), use a symmetric filter with the release time equivalent to attack time.
+        if (release_freq_hps_equivalent_of_attack_time
+            && release_freq_hps >= *release_freq_hps_equivalent_of_attack_time) {
+            attack_time_samples = nullopt;
+            release_freq_hps = *release_freq_hps_equivalent_of_attack_time;
+        }
+
         envelope_filters.emplace_back(
-          EnvelopeFilterOutputType::power,
-          pars.low_pass_filter.order,
-          pars.low_pass_filter.attack_time_samples,
-          release_freq_hps
+          EnvelopeFilterOutputType::power, pars.low_pass_filter.order, attack_time_samples, release_freq_hps
         );
     }
 }
@@ -102,7 +116,9 @@ void RecursiveCrossoverRMSDetector::process_core(span<float> samples, Crossovers
     bufs.crossover_input.resize(N);
     std::copy(samples.begin(), samples.end(), bufs.crossover_input.begin());
     bufs.total_power.assign(N, 0.0);
-    for (size_t i = 0; /* breaks from body */; i++) {
+    for (size_t i = 0; /* breaks from body */
+         ;
+         i++) {
         auto& c = crossovers[i];
         bufs.highpass = bufs.crossover_input;
         c.highpass.process(bufs.highpass);
