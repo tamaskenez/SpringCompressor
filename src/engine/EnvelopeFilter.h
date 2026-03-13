@@ -26,8 +26,13 @@ class EnvelopeFilter
 {
 public:
     using OutputType = EnvelopeFilterOutputType;
+
+    // The default constructor is provided to allow setting up later (by overwriting the previous instance).
+    // However, it's not meant to be used that way, in Debug build an `assert(false)` will be hit in `process).
+    // In release build `process` will be a no-op (bypass).
+    EnvelopeFilter();
     EnvelopeFilter(
-      OutputType output_type_arg, int lpf_order, std::optional<double> attack_time_samples, double release_freq_hps
+      OutputType output_type_arg, int lpf_order, std::optional<double> attack_time_samples, double release_time_samples
     );
 
     // Take the input samples and write back the envelope values in place.
@@ -37,7 +42,7 @@ public:
 private:
     OutputType output_type;
     // Function pointer for the type-erased templated process function.
-    void (*f_process)(EnvelopeFilter* that, std::span<IOFloat> samples, bool take_sqrt);
+    void (*f_process)(EnvelopeFilter* that, std::span<IOFloat> samples, bool take_sqrt) = nullptr;
 
     struct ExponentialMovingAverage {
         double release_coeff, attack_coeff = NAN, state = 0.0;

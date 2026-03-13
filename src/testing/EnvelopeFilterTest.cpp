@@ -1,5 +1,7 @@
 #include "EnvelopeFilter.h"
 
+#include "engine_util.h"
+
 #include <meadow/cppext.h>
 #include <meadow/math.h>
 
@@ -9,7 +11,10 @@ TEST(EnvelopeFilter, T1)
 {
     constexpr double fs = 48000;
     constexpr double release_freq_hz = 100.0;
-    constexpr double attack_time_sec = 0.001;
+    // The test was originally constructed for attack time constant = 1 ms, meanwhile the attack time changed, now it
+    // means 1 / cutoff frequency. We multiply 1 ms by 2 * pi to have the same effect with the changed
+    // meaning.
+    constexpr double attack_time_sec = 0.001 * 2.0 * num::pi;
     constexpr double attack_time_samples = attack_time_sec * fs;
     constexpr double release_freq_hps = release_freq_hz / fs * 2;
     constexpr double test_sine_freq_hz = 5000.0;
@@ -27,14 +32,15 @@ TEST(EnvelopeFilter, T1)
         sine_signal[N + i] = ffcast<float>(test_amplitude * sin(2.0 * num::pi * i * test_sine_freq_hz / fs));
     }
 
-    // EMA release coefficient (same formula as engine_util.cpp).
+    // EMA release coefficient.
     const double c_rel = cos(num::pi * release_freq_hps);
     const double coeff_release = 2.0 - c_rel - sqrt(square(c_rel - 2.0) - 1.0);
     const double tau_release = -1.0 / log(coeff_release); // samples
 
     // EMA attack coefficient for asymmetric case 2.
-    const double coeff_attack = exp(-1.0 / attack_time_samples);
-    // tau_attack == attack_time_samples by definition of coeff_attack.
+    const double attack_time_constant_samples = attack_time_samples / (2 * num::pi);
+    const double coeff_attack = exp(-1.0 / attack_time_constant_samples);
+    // tau_attack == attack_time_constant_samples by definition of coeff_attack.
 
     FILE* f = fopen("/tmp/envelopefiltertest.m", "w");
     assert(f);
@@ -56,7 +62,7 @@ TEST(EnvelopeFilter, T1)
                     break;
                 case 1:
                     // Use asymmetric, but the attack and release times are identical.
-                    attack_time_samples_arg = fs / (2.0 * num::pi * release_freq_hz);
+                    attack_time_samples_arg = fs / release_freq_hz;
                     label = "assym-same";
                     break;
                 case 2:
@@ -75,7 +81,7 @@ TEST(EnvelopeFilter, T1)
                       use_power ? EnvelopeFilterOutputType::rms : EnvelopeFilterOutputType::amplitude,
                       order,
                       attack_time_samples_arg,
-                      release_freq_hps
+                      freq_hps_to_samples(release_freq_hps)
                     );
                     auto samples = step_up_and_down_signal;
                     ef.process(samples);
@@ -115,10 +121,10 @@ TEST(EnvelopeFilter, T1)
                     }
 
                     if (order == 1 && asymmetric == 2) {
-                        // With fast attack (tau = attack_time_samples ≈ 48) the step-up should reach
-                        // ~63% of the settled value at attack_time_samples, well before tau_release
+                        // With fast attack (tau = attack_time_constant_samples ≈ 48) the step-up should reach
+                        // ~63% of the settled value at attack_time_constant_samples, well before tau_release
                         // (~76 samples) would get there.
-                        const unsigned n_attack = iround<unsigned>(attack_time_samples);
+                        const unsigned n_attack = iround<unsigned>(attack_time_constant_samples);
                         const double decay_attack = pow(coeff_attack, n_attack + 1); // ≈ 1/e
 
                         const auto expected_at_attack_tau = ffcast<float>(
@@ -140,7 +146,7 @@ TEST(EnvelopeFilter, T1)
                       use_power ? EnvelopeFilterOutputType::rms : EnvelopeFilterOutputType::amplitude,
                       order,
                       attack_time_samples_arg,
-                      release_freq_hps
+                      freq_hps_to_samples(release_freq_hps)
                     );
                     auto samples = sine_signal;
                     ef.process(samples);

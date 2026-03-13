@@ -5,8 +5,14 @@
 #include <meadow/math.h>
 
 template<class IOFloat>
+EnvelopeFilter<IOFloat>::EnvelopeFilter()
+    : output_type(OutputType::amplitude)
+{
+}
+
+template<class IOFloat>
 EnvelopeFilter<IOFloat>::EnvelopeFilter(
-  OutputType output_type_arg, int lpf_order, optional<double> attack_time_samples, double release_freq_hps
+  OutputType output_type_arg, int lpf_order, optional<double> attack_time_samples, double release_time_samples
 )
     : output_type(output_type_arg)
 {
@@ -23,8 +29,10 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
     case 1:
         if (attack_time_samples) {
             filter = ExponentialMovingAverage{
-              .release_coeff = exponential_moving_average_filter_coeff_from_cutoff_freq(release_freq_hps),
-              .attack_coeff = exponential_moving_average_filter_coeff_from_time_constant(*attack_time_samples)
+              .release_coeff =
+                exponential_moving_average_filter_coeff_from_cutoff_freq(samples_to_freq_hps(release_time_samples)),
+              .attack_coeff =
+                exponential_moving_average_filter_coeff_from_cutoff_freq(samples_to_freq_hps(*attack_time_samples))
             };
             if (use_power) {
                 f_process = t_process<true, 1, true>;
@@ -33,7 +41,8 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
             }
         } else {
             filter = ExponentialMovingAverage{
-              .release_coeff = exponential_moving_average_filter_coeff_from_cutoff_freq(release_freq_hps)
+              .release_coeff =
+                exponential_moving_average_filter_coeff_from_cutoff_freq(samples_to_freq_hps(release_time_samples))
             };
             if (use_power) {
                 f_process = t_process<true, 1, false>;
@@ -53,16 +62,15 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
             // We convert the release frequency to Hz with `freq_hz = freq_hps * 2 / fs` which is still
             // the same value. From the frequency we arrive to the time constant with the
             // `tau = 1 / (2 * pi * f)` formula.
-            spring.set_critically_damped_with_time_constant(
-              *attack_time_samples / fs, 1.0 / (2.0 * num::pi * release_freq_hps)
-            );
+            spring.set_critically_damped_with_cutoff_freq(fs / *attack_time_samples, fs / release_time_samples);
+
             if (use_power) {
                 f_process = t_process<true, 2, true>;
             } else {
                 f_process = t_process<false, 2, true>;
             }
         } else {
-            filter = Biquad_TDF2(critically_damped_second_order_lowpass(release_freq_hps));
+            filter = Biquad_TDF2(critically_damped_second_order_lowpass(samples_to_freq_hps(release_time_samples)));
             if (use_power) {
                 f_process = t_process<true, 2, false>;
             } else {
@@ -78,7 +86,11 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
 template<class IOFloat>
 void EnvelopeFilter<IOFloat>::process(span<IOFloat> samples)
 {
-    f_process(this, samples, output_type == EnvelopeFilterOutputType::rms);
+    if (f_process) {
+        f_process(this, samples, output_type == EnvelopeFilterOutputType::rms);
+    } else {
+        assert(false); // Calling process on default-initialized object.
+    }
 }
 
 template<class IOFloat>
