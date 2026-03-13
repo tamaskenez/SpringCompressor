@@ -87,3 +87,15 @@ TEST(engine_util_test, filters)
 
     NOP;
 }
+
+TEST(engine_util_test, time_constant_samples_to_cutoff_hps)
+{
+    constexpr double fs = 48000;
+
+    const double time_constant_samples = 123.0;
+    const double time_constant_sec = time_constant_samples / fs;
+    const double cutoff_hz = time_constant_sec_to_cutoff_hz(time_constant_sec);
+    const double cutoff_hps = hz_fs_to_hps(cutoff_hz, fs);
+    const auto actual_cutoff_hps = time_constant_samples_to_cutoff_hps(time_constant_samples);
+    EXPECT_NEAR(cutoff_hps, actual_cutoff_hps, 1e-16);
+}

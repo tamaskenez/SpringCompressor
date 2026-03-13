@@ -1,6 +1,8 @@
 #pragma once
 #include "meadow/matlab_signal.h"
 
+#include <numbers>
+
 class ExponentialMovingAverageFilter
 {
 public:
@@ -44,4 +46,19 @@ inline double freq_hps_to_samples(double freq_hps)
 inline double samples_to_freq_hps(double samples)
 {
     return 2.0 / samples;
+}
+
+inline double hz_fs_to_hps(double hz, double fs)
+{
+    return hz / fs * 2;
+}
+
+inline double time_constant_sec_to_cutoff_hz(double time_constant_sec)
+{
+    return 1.0 / (2.0 * std::numbers::pi * time_constant_sec);
+}
+
+inline double time_constant_samples_to_cutoff_hps(double time_constant_samples)
+{
+    return 1.0 / (std::numbers::pi * time_constant_samples);
 }
