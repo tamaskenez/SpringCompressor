@@ -19,7 +19,8 @@ size_t Bufs::capacity() const
 }
 } // namespace RecursiveCrossoverRMSDetectorDetail
 
-RecursiveCrossoverRMSDetector::RecursiveCrossoverRMSDetector(const Pars& pars, size_t max_block_size)
+template<class IOFloat>
+RecursiveCrossoverRMSDetector<IOFloat>::RecursiveCrossoverRMSDetector(const Pars& pars, size_t max_block_size)
 {
     assert(0 < pars.freq_lo_hps && pars.freq_lo_hps < pars.freq_hi_hps && pars.freq_hi_hps < 1);
     assert(pars.crossovers_per_octaves > 0);
@@ -27,7 +28,9 @@ RecursiveCrossoverRMSDetector::RecursiveCrossoverRMSDetector(const Pars& pars, s
     assert(in_cc_range(pars.low_pass_filter.order, 1, 2));
     assert(!pars.low_pass_filter.attack_time_samples || 0 <= *pars.low_pass_filter.attack_time_samples);
     assert(0 < pars.low_pass_filter.release_ratio_to_period);
-    assert(0 < pars.max_release_freq_hps);
+    assert(0 <= pars.min_release_time_samples);
+
+    output_power = pars.output_power;
 
     bufs.reserve(max_block_size);
 
@@ -60,12 +63,6 @@ RecursiveCrossoverRMSDetector::RecursiveCrossoverRMSDetector(const Pars& pars, s
 
     envelope_filters.reserve(freqs.size());
 
-    optional<double> release_freq_hps_equivalent_of_attack_time;
-    if (pars.low_pass_filter.attack_time_samples) {
-        release_freq_hps_equivalent_of_attack_time =
-          samples_to_freq_hps(*pars.low_pass_filter.attack_time_samples) / (2 * num::pi);
-    }
-
     for (auto freq : freqs) {
         switch (pars.bpf_order) {
         case 1:
@@ -90,25 +87,26 @@ RecursiveCrossoverRMSDetector::RecursiveCrossoverRMSDetector(const Pars& pars, s
             assert(false);
         }
         auto attack_time_samples = pars.low_pass_filter.attack_time_samples;
-        auto release_freq_hps =
-          std::min(freq / pars.low_pass_filter.release_ratio_to_period, pars.max_release_freq_hps);
+        auto release_time_samples = std::max(
+          freq_hps_to_samples(freq) * pars.low_pass_filter.release_ratio_to_period, pars.min_release_time_samples
+        );
 
         // If release time is smaller than attack time (that is, release freq is greater then the freq equivalent of
         // attack time), use a symmetric filter with the release time equivalent to attack time.
-        if (release_freq_hps_equivalent_of_attack_time
-            && release_freq_hps >= *release_freq_hps_equivalent_of_attack_time) {
+        if (attack_time_samples && release_time_samples <= *attack_time_samples) {
             attack_time_samples = nullopt;
-            release_freq_hps = *release_freq_hps_equivalent_of_attack_time;
+            release_time_samples = *attack_time_samples;
         }
 
         envelope_filters.emplace_back(
-          EnvelopeFilterOutputType::power, pars.low_pass_filter.order, attack_time_samples, release_freq_hps
+          EnvelopeFilterOutputType::power, pars.low_pass_filter.order, attack_time_samples, release_time_samples
         );
     }
 }
 
+template<class IOFloat>
 template<class Crossovers>
-void RecursiveCrossoverRMSDetector::process_core(span<float> samples, Crossovers& crossovers)
+void RecursiveCrossoverRMSDetector<IOFloat>::process_core(span<IOFloat> samples, Crossovers& crossovers)
 {
     assert(crossovers.size() == envelope_filters.size());
     const auto N = samples.size();
@@ -131,12 +129,19 @@ void RecursiveCrossoverRMSDetector::process_core(span<float> samples, Crossovers
         }
         c.lowpass.process(bufs.crossover_input);
     }
-    for (unsigned j = 0; j < N; ++j) {
-        samples[j] = ffcast<float>(std::sqrt(bufs.total_power[j]));
+    if (output_power) {
+        for (unsigned j = 0; j < N; ++j) {
+            samples[j] = ffcast<IOFloat>(bufs.total_power[j]);
+        }
+    } else {
+        for (unsigned j = 0; j < N; ++j) {
+            samples[j] = ffcast<IOFloat>(std::sqrt(bufs.total_power[j]));
+        }
     }
 }
 
-void RecursiveCrossoverRMSDetector::process(span<float> samples)
+template<class IOFloat>
+void RecursiveCrossoverRMSDetector<IOFloat>::process(span<IOFloat> samples)
 {
     std::visit(
       overloaded{
@@ -150,3 +155,6 @@ void RecursiveCrossoverRMSDetector::process(span<float> samples)
       crossovers_variant
     );
 }
+
+template class RecursiveCrossoverRMSDetector<float>;
+template class RecursiveCrossoverRMSDetector<double>;

@@ -4,30 +4,30 @@
 
 TEST(RecursiveCrossoverRMSDetector, T1)
 {
-    const double fs = 48000.0;
-    const int lpf_order = 1;
-    const int bpf_order = 2;
-    const double crossovers_per_octaves = 1.0;
-    const double freq_lo = 20.0;
-    const double freq_hi = 12000.0;
+    constexpr double fs = 48000.0;
+    constexpr int lpf_order = 1;
+    constexpr int bpf_order = 2;
+    constexpr double crossovers_per_octaves = 1.0;
+    constexpr double freq_lo = 20.0;
+    constexpr double freq_hi = 12000.0;
     const optional<double> attack_time_samples;
-    const double release_ratio = 1;
+    constexpr double release_ratio = 1;
 
     constexpr double test_sine_freq_hz = 5000.0;
     constexpr double test_one_part_length_sec = 0.1;
     constexpr double test_amplitude = 2.0; // Need a number which changes when squared, so not 1.0.
 
-    const auto lpf = RecursiveCrossoverRMSDetector::LowPassFilter{
+    const auto lpf = RecursiveCrossoverRMSDetectorPars::LowPassFilter{
       .order = lpf_order, .attack_time_samples = attack_time_samples, .release_ratio_to_period = release_ratio
     };
 
-    const auto pars = RecursiveCrossoverRMSDetector::Pars{
+    const auto pars = RecursiveCrossoverRMSDetectorPars{
       .freq_lo_hps = 2 * freq_lo / fs,
       .freq_hi_hps = 2 * freq_hi / fs,
       .crossovers_per_octaves = crossovers_per_octaves,
       .bpf_order = bpf_order,
       .low_pass_filter = lpf,
-      .max_release_freq_hps = INFINITY
+      .min_release_time_samples = 0
     };
 
     // The input test signal has three parts of equal lengths:
@@ -39,7 +39,7 @@ TEST(RecursiveCrossoverRMSDetector, T1)
     }
 
     const auto max_block_size = sine_signal.size();
-    auto d = RecursiveCrossoverRMSDetector(pars, max_block_size);
+    auto d = RecursiveCrossoverRMSDetector<float>(pars, max_block_size);
 
     auto sine_signal_output = sine_signal;
     d.process(sine_signal_output);
