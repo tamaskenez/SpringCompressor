@@ -20,6 +20,18 @@ void SpringLowPass::set_critically_damped_with_time_constant(double tau_up, doub
 {
     up_constants.set_critically_damped_with_time_constant(tau_up);
     down_constants.set_critically_damped_with_time_constant(tau_down);
+
+    // This limit corresponds to the rule of thumb that (1/fs) must be
+    // max T/10 where T is the time constant of the system.
+    // It gives a -3 dB cutoff frequency of 3089 Hz for the sampling rate = 48000 Hz.
+    const double min_tau = 10 / (2.0 * num::pi * sample_rate * sqrt(num::sqrt2 - 1));
+    assert(min_tau <= tau_up);
+    assert(min_tau <= tau_down);
+}
+
+void SpringLowPass::set_critically_damped_with_cutoff_freq(double freq_up_hz, double freq_down_hz)
+{
+    set_critically_damped_with_time_constant(1 / (2 * num::pi * freq_up_hz), 1 / (2 * num::pi * freq_down_hz));
 }
 
 double SpringLowPass::process(double sample_in)

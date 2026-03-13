@@ -3,6 +3,8 @@
 #include "SpringLowPass.h"
 
 #include "Biquad_TD2.h"
+#include "engine_util.h"
+#include "meadow/cppext.h"
 
 #include <cmath>
 #include <fstream>
@@ -86,6 +88,37 @@ TEST(SpringLowPass, compare_to_tustin_critically_damped_lpf)
     std::println(f, "A = [");
     for (unsigned i = 0; i < N; ++i) {
         std::println(f, " {} {}", slp_out[i], tustin_out[i]);
+    }
+    std::println(f, "];");
+}
+
+TEST(SpringLowPass, compare_to_2nd_orders_lpf)
+{
+    const double fs = 48000;
+    SpringLowPass slp(fs);
+    const double f_hz = 300;
+    // slp.set_critically_damped_with_time_constant(1 / (2 * std::numbers::pi * f_hz));
+    slp.set_critically_damped_with_cutoff_freq(f_hz);
+    const auto f_hps = hz_fs_to_hps(f_hz, fs);
+    auto critdamp_coeffs = critically_damped_second_order_lowpass(f_hps);
+    auto b2_coeffs = matlab::butter(2, matlab::FilterType::LowPass{f_hps});
+    auto critdamp = Biquad_TDF2(critdamp_coeffs);
+    auto b2 = Biquad_TDF2(b2_coeffs);
+
+    const unsigned N = iround<unsigned>(fs);
+    std::vector<double> slp_out;
+    std::vector<double> critdamp_out;
+    std::vector<double> b2_out;
+    for (unsigned i = 0; i < N; ++i) {
+        const double s = i == 0 ? 1.0 : 0.0;
+        slp_out.push_back(slp.process(s));
+        critdamp_out.push_back(critdamp.process(s));
+        b2_out.push_back(b2.process(s));
+    }
+    FILE* f = fopen("/tmp/slp_critdamp_b2.m", "w");
+    std::println(f, "A = [");
+    for (unsigned i = 0; i < N; ++i) {
+        std::println(f, " {} {} {}", slp_out[i], critdamp_out[i], b2_out[i]);
     }
     std::println(f, "];");
 }

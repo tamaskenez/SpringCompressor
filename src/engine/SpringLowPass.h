@@ -23,6 +23,11 @@ public:
         set_critically_damped_with_time_constant(tau, tau);
     }
     void set_critically_damped_with_time_constant(double tau_up, double tau_down);
+    void set_critically_damped_with_cutoff_freq(double freq_up_hz, double freq_down_hz);
+    void set_critically_damped_with_cutoff_freq(double freq_hz)
+    {
+        set_critically_damped_with_cutoff_freq(freq_hz, freq_hz);
+    }
 
 private:
     double sample_rate;
