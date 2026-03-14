@@ -26,7 +26,7 @@ struct RecursiveCrossoverRMSDetectorPars {
     // at freq_lo_hps. The LPF part of the lowest crossover will be discarded.
     double freq_lo_hps;
     double freq_hi_hps;
-    double crossovers_per_octaves;
+    double crossovers_per_octave;
     int bpf_order;
     struct LowPassFilter {
         int order; // 1 or 2.

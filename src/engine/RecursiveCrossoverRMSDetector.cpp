@@ -23,7 +23,7 @@ template<class IOFloat>
 RecursiveCrossoverRMSDetector<IOFloat>::RecursiveCrossoverRMSDetector(const Pars& pars, size_t max_block_size)
 {
     assert(0 < pars.freq_lo_hps && pars.freq_lo_hps < pars.freq_hi_hps && pars.freq_hi_hps < 1);
-    assert(pars.crossovers_per_octaves > 0);
+    assert(pars.crossovers_per_octave > 0);
     assert(in_cc_range(pars.bpf_order, 1, 2));
     assert(in_cc_range(pars.low_pass_filter.order, 1, 2));
     assert(!pars.low_pass_filter.attack_time_samples || 0 <= *pars.low_pass_filter.attack_time_samples);
@@ -35,7 +35,7 @@ RecursiveCrossoverRMSDetector<IOFloat>::RecursiveCrossoverRMSDetector(const Pars
     bufs.reserve(max_block_size);
 
     // Calculate the crossover frequencies.
-    const double freq_beta = pow(2, -1.0 / pars.crossovers_per_octaves);
+    const double freq_beta = pow(2, -1.0 / pars.crossovers_per_octave);
     vector<double> freqs;
     freqs.reserve(iceil<size_t>(log(pars.freq_lo_hps / pars.freq_hi_hps) / log(freq_beta)) + 1);
     for (auto freq = pars.freq_hi_hps;; freq *= freq_beta) {

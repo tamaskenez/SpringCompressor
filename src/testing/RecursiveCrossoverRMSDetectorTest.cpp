@@ -7,7 +7,7 @@ TEST(RecursiveCrossoverRMSDetector, T1)
     constexpr double fs = 48000.0;
     constexpr int lpf_order = 1;
     constexpr int bpf_order = 2;
-    constexpr double crossovers_per_octaves = 1.0;
+    constexpr double crossovers_per_octave = 1.0;
     constexpr double freq_lo = 20.0;
     constexpr double freq_hi = 12000.0;
     const optional<double> attack_time_samples;
@@ -24,7 +24,7 @@ TEST(RecursiveCrossoverRMSDetector, T1)
     const auto pars = RecursiveCrossoverRMSDetectorPars{
       .freq_lo_hps = 2 * freq_lo / fs,
       .freq_hi_hps = 2 * freq_hi / fs,
-      .crossovers_per_octaves = crossovers_per_octaves,
+      .crossovers_per_octave = crossovers_per_octave,
       .bpf_order = bpf_order,
       .low_pass_filter = lpf,
       .min_release_time_samples = 0
