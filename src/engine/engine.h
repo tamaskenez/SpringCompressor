@@ -74,7 +74,11 @@ public:
     virtual std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) = 0;
     virtual void release_resources() = 0;
 
-    virtual void set_pars(const EnginePars& pars) = 0;
+    enum class SetParsResult {
+        transfer_curve_didnt_change,
+        transfer_curve_changed
+    };
+    [[nodiscard]] virtual SetParsResult set_pars(const EnginePars& pars) = 0;
 
     [[nodiscard]] virtual TransferCurveState get_transfer_curve_state() const = 0;
     [[nodiscard]] virtual const std::vector<AF2>& get_rms_samples_of_last_block() const = 0;

@@ -2,12 +2,22 @@
 
 #include "JuceTimer.h"
 #include "engine.h"
+#include "meadow/evariant.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <readerwriterqueue/readerwriterqueue.h>
 
-#include <any>
 #include <memory>
+
+namespace AudioToUIMsg
+{
+using TransferCurveState = TransferCurveState; // Needed for the EVARIANT_CASE macro.
+struct RmsSamples {
+    // Each AF2 item contains an input and corresponding output RMS value.
+    std::inplace_vector<AF2, 16> samples;
+};
+EVARIANT_DECLARE_E_V(TransferCurveState, RmsSamples)
+} // namespace AudioToUIMsg
 
 class SpringCompressorProcessor
     : public juce::AudioProcessor
@@ -86,11 +96,12 @@ private:
           gain_control_application;
     } raw_parameter_values;
 
-    moodycamel::ReaderWriterQueue<TransferCurvePars> ui_to_audio_queue;
-    moodycamel::ReaderWriterQueue<std::any> audio_to_ui_queue;
+    moodycamel::ReaderWriterQueue<AudioToUIMsg::V> audio_to_ui_queue;
     bool audio_thread_running = false;
     juce::String program0_name = "program#0";
     bool ignore_parameter_changed = false;
+    std::atomic<bool> parameter_changed_was_called = false;
+    std::atomic<bool> call_editor_set_transfer_curve_anyway = false;
 
     int rms_matrix_clock = 0; // Incremented by one on each incoming rms sample.
     // Each incoming rms sample will update the corresponding element in the rms_matrix with the current
@@ -104,9 +115,9 @@ private:
     JuceTimer ui_refresh_timer;
 
     void parameterChanged(const juce::String&, float) override;
-    void update_ui_with_transfer_curve_update_result(const TransferCurveState& tcur);
-    void engine_set_transfer_curve_and_update_ui(const TransferCurvePars& tcp);
     void on_ui_refresh_timer_elapsed();
+    void sync_engine_processor(bool called_from_audio_thread);
+    void editor_set_transfer_curve(const TransferCurveState& tcs);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorProcessor)
 };

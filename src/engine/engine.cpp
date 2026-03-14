@@ -258,12 +258,15 @@ struct EngineImpl : public Engine {
         return ts;
     }
 
-    void set_pars(const EnginePars& pars_arg) override
+    SetParsResult set_pars(const EnginePars& pars_arg) override
     {
         // transfer_curve must always need to be set because it doesn't need sample_rate and does not heap-allocate. We
         // need it because it can be queried without processing (get_transfer_curve_state).
-        pars.transfer_curve = pars_arg.transfer_curve;
-        transfer_curve.set(pars.transfer_curve);
+        bool transfer_curve_changed = pars.transfer_curve != pars_arg.transfer_curve;
+        if (transfer_curve_changed) {
+            pars.transfer_curve = pars_arg.transfer_curve;
+            transfer_curve.set(pars.transfer_curve);
+        }
 
         // We only need to actually recompute the internals if we're prepared to play and have a sample rate.
         if (prepared_to_play) {
@@ -307,6 +310,8 @@ struct EngineImpl : public Engine {
             // Everything will be updated in prepare_to_play when we do have the sample_rate.
             pars = pars_arg;
         }
+        return transfer_curve_changed ? SetParsResult::transfer_curve_changed
+                                      : SetParsResult::transfer_curve_didnt_change;
     }
 
     [[nodiscard]] TransferCurveState get_transfer_curve_state() const override
