@@ -1,204 +1,317 @@
 #include "engine.h"
 
+#include "EnvelopeFilter.h"
+#include "RecursiveCrossoverRMSDetector.h"
 #include "RmsDetector.h"
-#include "SpringLowPass.h"
 #include "TransferCurve.h"
 
-#include <meadow/math.h>
 #include <meadow/matlab.h>
+#include <meadow/ranges.h>
 
 #include <cassert>
 #include <vector>
-
-// #define DO_LOG
 
 namespace
 {
 constexpr double k_rms_detector_hz = 2.1;
 } // namespace
 
-struct ChannelState {
-    explicit ChannelState(double sample_rate)
-        : gain_filter(sample_rate)
-    {
-    }
-    SpringLowPass gain_filter;
-    double gain = NAN;
-};
-
 struct EngineImpl : public Engine {
-    double sample_rate = 44100.0;
+    struct PreparedToPlay {
+        double sample_rate;
+        size_t max_block_size;
+        RecursiveCrossoverRMSDetector<double> input_level_multiband;
+    };
 
-    std::vector<ChannelState> channel_states;
+    EnginePars pars;
+    optional<PreparedToPlay> prepared_to_play;
+    vector<double> sidechain_buf;
+
+    EnvelopeFilter<double> input_level_lpf;
     TransferCurve transfer_curve;
+    EnvelopeFilter<double> gr_filter;
 
-    float attack_ms = 10.0f;
-    float release_ms = 100.0f;
-    GainControlApplication gain_control_application = GainControlApplication::on_gr_db;
     RmsDetector input_rms, output_rms;
     int rms_sample_counter = 0;
     int rms_sample_counter_period = 100;
     std::vector<AF2> rms_samples; // [0] is input, [1] is output.
 
-    void update_gain_filter_pars()
+    void set_input_level_lpf(double sample_rate_arg)
     {
-        // Note: this might be called on audio thread.
-        for (auto& chs : channel_states) {
-            chs.gain_filter.set_critically_damped_with_time_constant(attack_ms / 1000, release_ms / 1000);
-            chs.gain_filter.set_state(0.0, 0.0);
+        optional<double> attack_time_samples;
+        if (pars.input_level_lpf.attack_time_sec) {
+            attack_time_samples = *pars.input_level_lpf.attack_time_sec * sample_rate_arg;
         }
+        const auto release_time_samples = pars.input_level_lpf.release_time_sec * sample_rate_arg;
+        input_level_lpf = EnvelopeFilter<double>(
+          pars.input_level_lpf.rms ? EnvelopeFilterOutputType::power : EnvelopeFilterOutputType::amplitude,
+          pars.input_level_lpf.order,
+          attack_time_samples,
+          release_time_samples
+        );
     }
 
-    void prepare_to_play(double sr, int maxBlockSize, int num_channels) override
+    [[nodiscard]] RecursiveCrossoverRMSDetector<double>
+    make_input_level_multiband(double sample_rate_arg, size_t max_block_size) const
     {
-        sample_rate = sr;
-        channel_states.assign(sucast(num_channels), ChannelState(sample_rate));
-        for (auto& chs : channel_states) {
-            chs.gain_filter.set_state(0.0, 0.0);
+        return RecursiveCrossoverRMSDetector<double>(
+          RecursiveCrossoverRMSDetectorPars{
+            .freq_lo_hps = hz_fs_to_hps(pars.input_level_multiband.freq_lo_hz, sample_rate_arg),
+            .freq_hi_hps = hz_fs_to_hps(pars.input_level_multiband.freq_hi_hz, sample_rate_arg),
+            .crossovers_per_octave = pars.input_level_multiband.crossovers_per_octave,
+            .bpf_order = pars.input_level_multiband.crossover_order,
+            .low_pass_filter =
+              RecursiveCrossoverRMSDetectorPars::LowPassFilter{
+                                                               .order = pars.input_level_multiband.lp_order,
+                                                               .attack_time_samples = nullopt,
+                                                               .release_ratio_to_period = pars.input_level_multiband.lp_ratio
+              },
+            .min_release_time_samples = pars.input_level_multiband.min_release_time_sec * sample_rate_arg,
+            .output_power = true
+        },
+          max_block_size
+        );
+    }
+
+    void set_gr_filter(double sample_rate_arg)
+    {
+        optional<double> attack_time_samples;
+        if (pars.gr_filter.attack_time_sec) {
+            attack_time_samples = *pars.gr_filter.attack_time_sec * sample_rate_arg;
         }
-        update_gain_filter_pars();
+        const auto release_time_samples = pars.gr_filter.release_time_sec * sample_rate_arg;
+        gr_filter = EnvelopeFilter<double>(
+          EnvelopeFilterOutputType::amplitude, pars.gr_filter.order, attack_time_samples, release_time_samples
+        );
+    }
+
+    void prepare_to_play(double sr, int maxBlockSize, UNUSED int num_channels) override
+    {
+        prepared_to_play = PreparedToPlay{
+          .sample_rate = sr,
+          .max_block_size = sucast(maxBlockSize),
+          .input_level_multiband = make_input_level_multiband(sr, sucast(maxBlockSize))
+        };
+
+        sidechain_buf.reserve(prepared_to_play->max_block_size);
+
+        set_input_level_lpf(prepared_to_play->sample_rate);
+        transfer_curve.set(pars.transfer_curve);
+        set_gr_filter(prepared_to_play->sample_rate);
+
+        // Initialize RMS sample counter.
         rms_sample_counter = 0;
-        rms_sample_counter_period = std::max(1, iround<int>(sample_rate * k_rms_sample_period_sec));
+        rms_sample_counter_period = std::max(1, iround<int>(prepared_to_play->sample_rate * k_rms_sample_period_sec));
         rms_samples.clear();
         const auto max_rms_samples_in_block =
           sucast((maxBlockSize + rms_sample_counter_period - 1) / rms_sample_counter_period);
         rms_samples.reserve(max_rms_samples_in_block);
-        input_rms = RmsDetector(RmsDetector::Flavor::exponential_moving_average, k_rms_detector_hz / sample_rate * 2);
+        input_rms = RmsDetector(
+          RmsDetector::Flavor::exponential_moving_average,
+          hz_fs_to_hps(k_rms_detector_hz, prepared_to_play->sample_rate)
+        );
         output_rms = input_rms;
     }
 
     void release_resources() override
     {
-        channel_states.clear();
+        prepared_to_play = nullopt;
+        rms_samples = vector<AF2>();
+        sidechain_buf = vector<double>();
     }
 
     void process_block(std::span<float* const> channel_data, int num_samples) override
     {
-        assert(channel_data.size() == channel_states.size());
-        if (num_samples == 0) {
+        if (!prepared_to_play) {
+            assert(false);
             return;
         }
-        rms_samples.resize(sucast((rms_sample_counter + num_samples) / rms_sample_counter_period));
+
+        if (channel_data.empty() || num_samples <= 0) {
+            return;
+        }
+
+        // Lambda for measuring the RMS of the average of the channels in channel_data_ and write it
+        // into rms_samples[][rms_channel_ix]. It will be called twice, before and after the actual processing.
+        // The rms_samples vector must already be resized to the exact number of rms samples that will be written into
+        // it.
         const auto measure_rms =
-          [num_samples, channel_data, period = rms_sample_counter_period, &rms_samples_ = rms_samples](
-            RmsDetector& rms_detector, unsigned offset, int sample_counter
+          [num_samples, period = rms_sample_counter_period, &rms_samples_ = rms_samples](
+            span<float* const> channel_data_, RmsDetector& rms_detector, unsigned rms_channel_ix, int sample_counter
           ) -> int {
-            const auto channel_data_size = ifcast<float>(channel_data.size());
+            const auto channel_data_size = ifcast<float>(channel_data_.size());
             unsigned rms_sample_ix = 0;
             for (int i = 0; i < num_samples; ++i) {
                 float sum = 0;
-                for (auto* chd : channel_data) {
+                for (auto* chd : channel_data_) {
                     sum += chd[i];
                 }
                 rms_detector.process(sum / channel_data_size);
                 if (++sample_counter >= period) {
                     assert(rms_sample_ix < rms_samples_.size());
-                    rms_samples_[rms_sample_ix++][offset] = rms_detector.get_rms();
+                    rms_samples_[rms_sample_ix++][rms_channel_ix] = rms_detector.get_rms();
                     sample_counter = 0;
                 }
             }
             assert(rms_sample_ix == rms_samples_.size());
             return sample_counter;
         };
-        measure_rms(input_rms, 0, rms_sample_counter);
-#ifdef DO_LOG
-        static vector<AD3> log;
-        log.clear();
-#endif
-        for (size_t ch_ix = 0; ch_ix < channel_data.size(); ++ch_ix) {
-            auto* channel_buf = channel_data[ch_ix];
-            auto& chs = channel_states[ch_ix];
-            auto& gf = chs.gain_filter;
-            double gain = NAN;
-            for (int i = 0; i < num_samples; ++i) {
-                const double input_sample = channel_buf[i];
-                switch (gain_control_application) {
-                case GainControlApplication::on_abs_input: {
-                    const auto lp_a_x = gf.process(abs(input_sample));
-                    gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::mag2db(lp_a_x)));
-                } break;
-                case GainControlApplication::on_squared_input: {
-                    const auto lp_sq_x = gf.process(square(input_sample));
-                    gain = matlab::db2mag(transfer_curve.gain_db_for_input_db(matlab::pow2db(lp_sq_x)));
-                } break;
-                case GainControlApplication::on_gr_db: {
-                    const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
-                    const auto smoothed_gain_db = -gf.process(-gain_db);
-#ifdef DO_LOG
-                    if (ch_ix == 0) {
-                        log.push_back(AD3{input_db, gain_db, smoothed_gain_db});
-                    }
-#endif
-                    gain = matlab::db2mag(smoothed_gain_db);
-                } break;
-                case GainControlApplication::on_gr_mag: {
-                    const auto gain_db = transfer_curve.gain_db_for_input_db(matlab::mag2db(abs(input_sample)));
-                    const auto smoothed_gain = 1 - gf.process(1 - matlab::db2mag(gain_db));
-                    gain = std::max(0.0, smoothed_gain);
-                } break;
-                }
-                channel_buf[i] = ffcast<float>(input_sample * gain);
-            }
-            chs.gain = gain; // The latest gain.
+
+        // Create sidechain data from the sum of inputs.
+        sidechain_buf.resize(sucast(num_samples));
+        std::copy_n(channel_data[0], num_samples, sidechain_buf.data());
+        for (unsigned i = 1; i < channel_data.size(); ++i) {
+            range_plus_equals(sidechain_buf, span(channel_data[i], sucast(num_samples)));
         }
-#ifdef DO_LOG
-        {
-            FILE* f = fopen("/Users/tamas/tmp/log.m", "wt");
-            assert(f);
-            println(f, "A = [");
-            for (const auto& l : log) {
-                println(f, "\t{} {} {}", l[0], l[1], l[2]);
+        range_divide_equals(sidechain_buf, ifcast<double>(channel_data.size()));
+
+        // TODO: once we have an actual, separate sidechain we need to rethink what to
+        // measure instead of input and output RMS.
+
+        // Now measure input sum of channel data RMS. We're summing again, just to keep this separate from the
+        // sidechain summing.
+        rms_samples.resize(sucast((rms_sample_counter + num_samples) / rms_sample_counter_period));
+        measure_rms(channel_data, input_rms, 0, rms_sample_counter);
+
+        // sidechain_buf is ready to be processed into the gain signal.
+
+        // First, convert it to an input level and apply the transfer curve.
+        switch (pars.input_level_method) {
+        case EnginePars::InputLevelMethod::direct:
+            for (auto& s : sidechain_buf) {
+                s = transfer_curve.gain_db_for_input_db(matlab::mag2db(std::abs(s)));
             }
-            println(f, "];");
-            fclose(f);
+            break;
+        case EnginePars::InputLevelMethod::lpf:
+            input_level_lpf.process(sidechain_buf);
+            for (auto& s : sidechain_buf) {
+                s = transfer_curve.gain_db_for_input_db(matlab::pow2db(s));
+            }
+            break;
+        case EnginePars::InputLevelMethod::multiband:
+            prepared_to_play->input_level_multiband.process(sidechain_buf);
+            for (auto& s : sidechain_buf) {
+                s = transfer_curve.gain_db_for_input_db(matlab::pow2db(s));
+            }
+            break;
         }
-#endif
-        rms_sample_counter = measure_rms(output_rms, 1, rms_sample_counter);
+
+        // Apply GR-filtering.
+        switch (pars.gr_filter_mode) {
+        case EnginePars::GRFilterMode::off:
+            for (auto& s : sidechain_buf) {
+                s = matlab::db2mag(s);
+            }
+            // At this point, sidechain_buf contains linear gain values.
+            break;
+        case EnginePars::GRFilterMode::mag:
+            for (auto& s : sidechain_buf) {
+                s = matlab::db2mag(s);
+            }
+            // Note: gr filter should be set up for amplitude filtering.
+            gr_filter.process(sidechain_buf);
+            // At this point, sidechain_buf contains linear gain values.
+            break;
+        case EnginePars::GRFilterMode::pow:
+            for (auto& s : sidechain_buf) {
+                s = matlab::db2pow(s);
+            }
+            // Note: gr filter should be set up for amplitude filtering to prevent squaring the already squared
+            // signal.
+            gr_filter.process(sidechain_buf);
+            // At this point, sidechain_buf contains squared gain values.
+            for (auto& s : sidechain_buf) {
+                s = sqrt(s);
+            }
+            // At this point, sidechain_buf contains linear gain values.
+            break;
+        case EnginePars::GRFilterMode::db:
+            // Note: gr filter should be set up for amplitude filtering.
+            gr_filter.process(sidechain_buf);
+            // At this point, sidechain_buf contains dB gain values.
+            for (auto& s : sidechain_buf) {
+                s = matlab::db2mag(s);
+            }
+            // At this point, sidechain_buf contains linear gain values.
+            break;
+        }
+        // At this point, sidechain_buf contains linear gain values.
+        // Apply linear gain to channel data.
+        for (auto chd : channel_data) {
+            for (unsigned i = 0; i < sucast(num_samples); ++i) {
+                chd[i] = ffcast<float>(chd[i] * sidechain_buf[i]);
+            }
+        }
+
+        // Measure output RMS.
+        rms_sample_counter = measure_rms(channel_data, output_rms, 1, rms_sample_counter);
     }
+
     std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) override
     {
-        assert(channel_data.size() == 1);
+        process_block(channel_data, num_samples);
+        assert(cmp_equal(sidechain_buf.size(), num_samples));
         std::vector<Trace> ts;
-        float* cd = channel_data[0];
-        for (int j = 0; j < num_samples; ++j, ++cd) {
-            process_block(std::span<float* const>(&cd, 1), 1);
-            ts.push_back(Trace{.gain = channel_states[0].gain});
+        for (auto x : sidechain_buf) {
+            ts.push_back(Trace{.gain = x});
         }
         return ts;
     }
 
-    std::optional<TransferCurveState> set_transfer_curve(const TransferCurvePars& p) override
+    void set_pars(const EnginePars& pars_arg) override
     {
-        return transfer_curve.set(p);
-    }
-    void set_attack_ms(float ms) override
-    {
-        if (attack_ms != ms) {
-            attack_ms = ms;
-            update_gain_filter_pars();
+        // transfer_curve must always need to be set because it doesn't need sample_rate and does not heap-allocate. We
+        // need it because it can be queried without processing (get_transfer_curve_state).
+        pars.transfer_curve = pars_arg.transfer_curve;
+        transfer_curve.set(pars.transfer_curve);
+
+        // We only need to actually recompute the internals if we're prepared to play and have a sample rate.
+        if (prepared_to_play) {
+            pars.input_level_method = pars_arg.input_level_method;
+            switch (pars.input_level_method) {
+            case EnginePars::InputLevelMethod::direct:
+                break;
+            case EnginePars::InputLevelMethod::lpf:
+                if (pars.input_level_lpf != pars_arg.input_level_lpf) {
+                    pars.input_level_lpf = pars_arg.input_level_lpf;
+                    set_input_level_lpf(prepared_to_play->sample_rate);
+                }
+                break;
+            case EnginePars::InputLevelMethod::multiband: {
+                if (pars.input_level_multiband != pars_arg.input_level_multiband) {
+                    pars.input_level_multiband = pars_arg.input_level_multiband;
+                    // TODO: RecursiveCrossoverRMSDetector heap-allocates, while set_pars might be called on audio
+                    // thread. Need to find a solution later.
+                    prepared_to_play->input_level_multiband =
+                      make_input_level_multiband(prepared_to_play->sample_rate, prepared_to_play->max_block_size);
+                }
+            } break;
+            }
+
+            // Set up GR filter.
+            pars.gr_filter_mode = pars_arg.gr_filter_mode;
+            switch (pars.gr_filter_mode) {
+            case EnginePars::GRFilterMode::off:
+                // Nothing to do.
+                break;
+            case EnginePars::GRFilterMode::mag:
+            case EnginePars::GRFilterMode::pow:
+            case EnginePars::GRFilterMode::db:
+                if (pars.gr_filter != pars_arg.gr_filter) {
+                    pars.gr_filter = pars_arg.gr_filter;
+                    set_gr_filter(prepared_to_play->sample_rate);
+                }
+                break;
+            }
+        } else {
+            // Everything will be updated in prepare_to_play when we do have the sample_rate.
+            pars = pars_arg;
         }
     }
-    void set_release_ms(float ms) override
-    {
-        if (release_ms != ms) {
-            release_ms = ms;
-            update_gain_filter_pars();
-        }
-    }
-    void set_gain_control_application(GainControlApplication application) override
-    {
-        if (gain_control_application != application) {
-            gain_control_application = application;
-            update_gain_filter_pars();
-        }
-    }
+
     [[nodiscard]] TransferCurveState get_transfer_curve_state() const override
     {
         return transfer_curve.get_state();
-    }
-    [[nodiscard]] float get_rms_sample_period_sec() const override
-    {
-        return ffcast<float>(rms_sample_counter_period / sample_rate);
     }
     [[nodiscard]] const std::vector<AF2>& get_rms_samples_of_last_block() const override
     {
