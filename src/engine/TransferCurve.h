@@ -17,6 +17,8 @@ struct TransferCurvePars {
     float makeup_gain_db = 0;
     float reference_level_db = -INFINITY;
 
+    bool operator==(const TransferCurvePars& other) const = default;
+
     bool sanitize();
 };
 

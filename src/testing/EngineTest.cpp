@@ -11,18 +11,12 @@
 
 TEST(Engine, save_sine_compression)
 {
-    constexpr double sample_rate = 1000.0;
+    constexpr double sample_rate = 48000.0;
     constexpr int num_samples = static_cast<int>(sample_rate); // 1 second
     constexpr double freq = 100.0;
 
     auto engine = make_engine();
     engine->prepare_to_play(sample_rate, num_samples, 1);
-    TransferCurvePars tcp;
-    tcp.threshold_db = -20;
-    tcp.ratio = 4;
-    engine->set_transfer_curve(tcp);
-    engine->set_attack_ms(15.0f);
-    engine->set_release_ms(15.0f);
 
     std::vector<float> input(num_samples);
     double A = 1.0;

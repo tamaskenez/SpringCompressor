@@ -226,3 +226,5 @@ void FilterBankRmsDetector::process(span<double> samples)
     grlpf_attack: 0-50, middle: 10
     grlpf_release: 0-2000, middle: 100
 #endif
+
+
