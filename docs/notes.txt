@@ -209,22 +209,3 @@ void FilterBankRmsDetector::process(span<double> samples)
     }
 }
 #endif
-
-## New controls
-
-#if 0
-    crossover_freqlo: 20-1000, middle: 100
-    crossover_freqhi: 200-12000, middle: 2000
-    crossover_peroctave: 0.5-6, middle: 2
-    crossover_bporder: 1 or 2
-    crossover_lporder: 1 or 2
-    crossover_lpratio: 0.1-10, middle: 2
-    crossover_mintime: 0-50, middle: 10
-
-    grlpf_enable: off/mag/pow/db
-    grlpf_order: 1 or 2
-    grlpf_attack: 0-50, middle: 10
-    grlpf_release: 0-2000, middle: 100
-#endif
-
-
