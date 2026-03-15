@@ -41,7 +41,23 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .ratio = apvts.getRawParameterValue("ratio"),
         .makeup_gain_db = apvts.getRawParameterValue("makeup"),
         .reference_level_db = apvts.getRawParameterValue("reference_level"),
-        .knee_width_db = apvts.getRawParameterValue("knee_width")
+        .knee_width_db = apvts.getRawParameterValue("knee_width"),
+        .level_method = apvts.getRawParameterValue("level_method"),
+        .levellpf_mode = apvts.getRawParameterValue("levellpf_mode"),
+        .levellpf_order = apvts.getRawParameterValue("levellpf_order"),
+        .levellpf_attack = apvts.getRawParameterValue("levellpf_attack"),
+        .levellpf_release = apvts.getRawParameterValue("levellpf_release"),
+        .levelmb_freqlo = apvts.getRawParameterValue("levelmb_freqlo"),
+        .levelmb_freqhi = apvts.getRawParameterValue("levelmb_freqhi"),
+        .levelmb_peroctave = apvts.getRawParameterValue("levelmb_peroctave"),
+        .levelmb_order = apvts.getRawParameterValue("levelmb_order"),
+        .levelmb_lporder = apvts.getRawParameterValue("levelmb_lporder"),
+        .levelmb_lpratio = apvts.getRawParameterValue("levelmb_lpratio"),
+        .levelmb_minrelease = apvts.getRawParameterValue("levelmb_minrelease"),
+        .grlp_enable = apvts.getRawParameterValue("grlp_enable"),
+        .grlp_order = apvts.getRawParameterValue("grlp_order"),
+        .grlp_attack = apvts.getRawParameterValue("grlp_attack"),
+        .grlp_release = apvts.getRawParameterValue("grlp_release")
     }
     , rms_matrix(square(k_rms_matrix_size), INT_MIN)
     , rms_matrix_as_mdspan(rms_matrix.data(), k_rms_matrix_size, k_rms_matrix_size)
@@ -188,16 +204,52 @@ void SpringCompressorProcessor::sync_engine_processor(bool called_from_audio_thr
     Engine::SetParsResult r = Engine::SetParsResult::transfer_curve_didnt_change;
 
     if (parameter_changed_was_called.exchange(false)) {
-        // TODO: query all the parameters and fill in EnginePars.
+        const auto& p = raw_parameter_values;
+        auto ms_to_sec = [](float ms) {
+            return ms / 1000.0f;
+        };
+        auto attack_sec = [&](std::atomic<float>* a) -> optional<float> {
+            const float ms = a->load();
+            return ms > 0.0f ? optional<float>{ms_to_sec(ms)} : nullopt;
+        };
+        auto order = [](std::atomic<float>* o) {
+            return iround<int>(o->load()) + 1;
+        };
+
         r = engine->set_pars(
           EnginePars{
-            .transfer_curve = TransferCurvePars{
-                                                .threshold_db = raw_parameter_values.threshold_db->load(),
-                                                .ratio = raw_parameter_values.ratio->load(),
-                                                .knee_width_db = raw_parameter_values.knee_width_db->load(),
-                                                .makeup_gain_db = raw_parameter_values.makeup_gain_db->load(),
-                                                .reference_level_db = raw_parameter_values.reference_level_db->load()
-            }
+            .input_level_method = static_cast<EnginePars::InputLevelMethod>(iround<int>(p.level_method->load())),
+            .input_level_lpf =
+              {
+                                .rms = iround<int>(p.levellpf_mode->load()) == 1,
+                                .order = order(p.levellpf_order),
+                                .attack_time_sec = attack_sec(p.levellpf_attack),
+                                .release_time_sec = ms_to_sec(p.levellpf_release->load()),
+                                },
+            .input_level_multiband =
+              {
+                                .freq_lo_hz = p.levelmb_freqlo->load(),
+                                .freq_hi_hz = p.levelmb_freqhi->load(),
+                                .crossovers_per_octave = p.levelmb_peroctave->load(),
+                                .crossover_order = order(p.levelmb_order),
+                                .lp_order = order(p.levelmb_lporder),
+                                .lp_ratio = p.levelmb_lpratio->load(),
+                                .min_release_time_sec = ms_to_sec(p.levelmb_minrelease->load()),
+                                },
+            .transfer_curve =
+              {
+                                .threshold_db = p.threshold_db->load(),
+                                .ratio = p.ratio->load(),
+                                .knee_width_db = p.knee_width_db->load(),
+                                .makeup_gain_db = p.makeup_gain_db->load(),
+                                .reference_level_db = p.reference_level_db->load(),
+                                },
+            .gr_filter_mode = static_cast<EnginePars::GRFilterMode>(iround<int>(p.grlp_enable->load())),
+            .gr_filter = {
+                                .order = order(p.grlp_order),
+                                .attack_time_sec = attack_sec(p.grlp_attack),
+                                .release_time_sec = ms_to_sec(p.grlp_release->load()),
+                                },
         }
         );
     }

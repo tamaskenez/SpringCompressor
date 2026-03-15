@@ -93,6 +93,11 @@ private:
     struct RawParameterValues {
         using float_pointer = std::atomic<float>*;
         float_pointer threshold_db, ratio, makeup_gain_db, reference_level_db, knee_width_db;
+        float_pointer level_method;
+        float_pointer levellpf_mode, levellpf_order, levellpf_attack, levellpf_release;
+        float_pointer levelmb_freqlo, levelmb_freqhi, levelmb_peroctave, levelmb_order, levelmb_lporder,
+          levelmb_lpratio, levelmb_minrelease;
+        float_pointer grlp_enable, grlp_order, grlp_attack, grlp_release;
     } raw_parameter_values;
 
     moodycamel::ReaderWriterQueue<AudioToUIMsg::V> audio_to_ui_queue;
