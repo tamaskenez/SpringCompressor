@@ -9,6 +9,10 @@
 class ScopeComponent : public juce::Component
 {
 public:
+    // Margins reserved for axis labels.
+    static constexpr int k_margin_left = 30;
+    static constexpr int k_margin_bottom = 14;
+
     void draw_grid(float min_x, float max_x, float min_y, float max_y, float x_step, float y_step);
 
     void paint(juce::Graphics& g) override;
