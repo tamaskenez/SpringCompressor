@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "JuceTimer.h"
+#include "ScopeComponent.h"
 #include "TransferCurveComponent.h"
 
 class RadioButtonGroup : public juce::Component
@@ -65,6 +66,14 @@ public:
       int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
     );
 
+    // Clears the scope component (to black) and draws gray grid lines in the image. The bottom-left of the image
+    // has the logical coordinates of (min_x, min_y), x increases to the left, y increases to the top.
+    // The logical width of the image is max_x - min_x, the logical height of the image is max_y - min_y.
+    // Draw the vertical grid lines at the x coordinates where x is multiple of x_step. Draw the horizontal
+    // grid lines at the y coordinates where y is a multiple of y_step. The min_x, max_x, min_y and max_y
+    // will be stored along the image for use in other draw_scope functions.
+    void draw_scope_grid(float min_x, float max_x, float min_y, float max_y, float x_step, float y_step);
+
 private:
     std::atomic<bool>& editor_open;
 
@@ -87,7 +96,7 @@ private:
       grlp_attack_label, grlp_release_label;
 
     TransferCurveComponent transfer_curve_component;
-    juce::ImageComponent image_component;
+    ScopeComponent scope;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     SliderAttachment thresholdAttachment, ratioAttachment, makeupAttachment, referenceLevelAttachment,

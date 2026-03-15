@@ -84,7 +84,7 @@ SpringCompressorEditor::SpringCompressorEditor(
     setup_label(grlp_release_label, "grlp_release");
 
     addAndMakeVisible(transfer_curve_component);
-    addAndMakeVisible(image_component);
+    addAndMakeVisible(scope);
 
     setSize(800, 20 + 120 + 16 * 28);
 }
@@ -101,7 +101,7 @@ void SpringCompressorEditor::resized()
     // Right column: transfer curve on top, image component below
     auto right_col = area.removeFromRight(TransferCurveComponent::k_window_size);
     transfer_curve_component.setBounds(right_col.removeFromTop(TransferCurveComponent::k_window_size));
-    image_component.setBounds(right_col);
+    scope.setBounds(right_col);
 
     // Left column: rotary knobs (labels sit above via attachToComponent)
     {
@@ -138,6 +138,13 @@ void SpringCompressorEditor::resized()
     layout(grlp_order_label, grlp_order);
     layout(grlp_attack_label, grlp_attack);
     layout(grlp_release_label, grlp_release);
+}
+
+void SpringCompressorEditor::draw_scope_grid(
+  float min_x, float max_x, float min_y, float max_y, float x_step, float y_step
+)
+{
+    scope.draw_grid(min_x, max_x, min_y, max_y, x_step, y_step);
 }
 
 void SpringCompressorEditor::set_transfer_curve(const TransferCurveState& tcur)
