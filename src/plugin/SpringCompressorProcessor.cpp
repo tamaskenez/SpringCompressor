@@ -199,59 +199,61 @@ void SpringCompressorProcessor::releaseResources()
     engine->release_resources();
 }
 
+EnginePars SpringCompressorProcessor::query_raw_parameter_values_into_EnginePars()
+{
+    const auto& p = raw_parameter_values;
+    auto ms_to_sec = [](float ms) {
+        return ms / 1000.0f;
+    };
+    auto attack_sec = [&](std::atomic<float>* a) -> optional<float> {
+        const float ms = a->load();
+        return ms > 0.0f ? optional<float>{ms_to_sec(ms)} : nullopt;
+    };
+    auto order = [](std::atomic<float>* o) {
+        return iround<int>(o->load()) + 1;
+    };
+    return EnginePars{
+      .input_level_method = static_cast<EnginePars::InputLevelMethod>(iround<int>(p.level_method->load())),
+      .input_level_lpf =
+        {
+                          .rms = iround<int>(p.levellpf_mode->load()) == 1,
+                          .order = order(p.levellpf_order),
+                          .attack_time_sec = attack_sec(p.levellpf_attack),
+                          .release_time_sec = ms_to_sec(p.levellpf_release->load()),
+                          },
+      .input_level_multiband =
+        {
+                          .freq_lo_hz = p.levelmb_freqlo->load(),
+                          .freq_hi_hz = p.levelmb_freqhi->load(),
+                          .crossovers_per_octave = p.levelmb_peroctave->load(),
+                          .crossover_order = order(p.levelmb_order),
+                          .lp_order = order(p.levelmb_lporder),
+                          .lp_ratio = p.levelmb_lpratio->load(),
+                          .min_release_time_sec = ms_to_sec(p.levelmb_minrelease->load()),
+                          },
+      .transfer_curve =
+        {
+                          .threshold_db = p.threshold_db->load(),
+                          .ratio = p.ratio->load(),
+                          .knee_width_db = p.knee_width_db->load(),
+                          .makeup_gain_db = p.makeup_gain_db->load(),
+                          .reference_level_db = p.reference_level_db->load(),
+                          },
+      .gr_filter_mode = static_cast<EnginePars::GRFilterMode>(iround<int>(p.grlp_enable->load())),
+      .gr_filter = {
+                          .order = order(p.grlp_order),
+                          .attack_time_sec = attack_sec(p.grlp_attack),
+                          .release_time_sec = ms_to_sec(p.grlp_release->load()),
+                          },
+    };
+}
+
 void SpringCompressorProcessor::sync_engine_processor(bool called_from_audio_thread)
 {
     Engine::SetParsResult r = Engine::SetParsResult::transfer_curve_didnt_change;
 
     if (parameter_changed_was_called.exchange(false)) {
-        const auto& p = raw_parameter_values;
-        auto ms_to_sec = [](float ms) {
-            return ms / 1000.0f;
-        };
-        auto attack_sec = [&](std::atomic<float>* a) -> optional<float> {
-            const float ms = a->load();
-            return ms > 0.0f ? optional<float>{ms_to_sec(ms)} : nullopt;
-        };
-        auto order = [](std::atomic<float>* o) {
-            return iround<int>(o->load()) + 1;
-        };
-
-        r = engine->set_pars(
-          EnginePars{
-            .input_level_method = static_cast<EnginePars::InputLevelMethod>(iround<int>(p.level_method->load())),
-            .input_level_lpf =
-              {
-                                .rms = iround<int>(p.levellpf_mode->load()) == 1,
-                                .order = order(p.levellpf_order),
-                                .attack_time_sec = attack_sec(p.levellpf_attack),
-                                .release_time_sec = ms_to_sec(p.levellpf_release->load()),
-                                },
-            .input_level_multiband =
-              {
-                                .freq_lo_hz = p.levelmb_freqlo->load(),
-                                .freq_hi_hz = p.levelmb_freqhi->load(),
-                                .crossovers_per_octave = p.levelmb_peroctave->load(),
-                                .crossover_order = order(p.levelmb_order),
-                                .lp_order = order(p.levelmb_lporder),
-                                .lp_ratio = p.levelmb_lpratio->load(),
-                                .min_release_time_sec = ms_to_sec(p.levelmb_minrelease->load()),
-                                },
-            .transfer_curve =
-              {
-                                .threshold_db = p.threshold_db->load(),
-                                .ratio = p.ratio->load(),
-                                .knee_width_db = p.knee_width_db->load(),
-                                .makeup_gain_db = p.makeup_gain_db->load(),
-                                .reference_level_db = p.reference_level_db->load(),
-                                },
-            .gr_filter_mode = static_cast<EnginePars::GRFilterMode>(iround<int>(p.grlp_enable->load())),
-            .gr_filter = {
-                                .order = order(p.grlp_order),
-                                .attack_time_sec = attack_sec(p.grlp_attack),
-                                .release_time_sec = ms_to_sec(p.grlp_release->load()),
-                                },
-        }
-        );
+        r = engine->set_pars(query_raw_parameter_values_into_EnginePars());
     }
 
     if (call_editor_set_transfer_curve_anyway.exchange(false)) {
@@ -428,7 +430,7 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
     }
     if (!audio_thread_running) {
         // We're calling sync here to make sure we don't miss anything because the audio thread is stopped after a
-        // paramChange call but before it could call sync_engine_processor.
+        // parameterChanged call but before it could call sync_engine_processor.
         sync_engine_processor(false);
     }
 }

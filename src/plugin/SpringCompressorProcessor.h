@@ -122,6 +122,7 @@ private:
     void on_ui_refresh_timer_elapsed();
     void sync_engine_processor(bool called_from_audio_thread);
     void editor_set_transfer_curve(const TransferCurveState& tcs);
+    EnginePars query_raw_parameter_values_into_EnginePars();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorProcessor)
 };
