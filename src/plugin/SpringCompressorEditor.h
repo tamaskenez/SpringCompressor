@@ -87,6 +87,7 @@ private:
       grlp_attack_label, grlp_release_label;
 
     TransferCurveComponent transfer_curve_component;
+    juce::ImageComponent image_component;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     SliderAttachment thresholdAttachment, ratioAttachment, makeupAttachment, referenceLevelAttachment,

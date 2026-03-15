@@ -84,6 +84,7 @@ SpringCompressorEditor::SpringCompressorEditor(
     setup_label(grlp_release_label, "grlp_release");
 
     addAndMakeVisible(transfer_curve_component);
+    addAndMakeVisible(image_component);
 
     setSize(800, 20 + 120 + 16 * 28);
 }
@@ -97,10 +98,10 @@ void SpringCompressorEditor::resized()
 {
     auto area = getLocalBounds().reduced(10);
 
-    // Right column: transfer curve
+    // Right column: transfer curve on top, image component below
     auto right_col = area.removeFromRight(TransferCurveComponent::k_window_size);
-    const int sq = std::min(right_col.getWidth(), right_col.getHeight());
-    transfer_curve_component.setBounds(right_col.withSizeKeepingCentre(sq, sq));
+    transfer_curve_component.setBounds(right_col.removeFromTop(TransferCurveComponent::k_window_size));
+    image_component.setBounds(right_col);
 
     // Left column: rotary knobs (labels sit above via attachToComponent)
     {
