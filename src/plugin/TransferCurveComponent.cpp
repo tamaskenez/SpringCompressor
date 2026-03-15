@@ -99,13 +99,13 @@ void TransferCurveComponent::update_rms_dots(
   int rms_matrix_clock, std::mdspan<int, std::dextents<int, 2>> rms_matrix, double rms_sample_period_sec
 )
 {
-    const int w = rms_overlay.getWidth();
-    const int h = rms_overlay.getHeight();
+    const auto w = rms_overlay.getWidth();
+    const auto h = rms_overlay.getHeight();
     if (w == 0 || h == 0)
         return;
 
     constexpr double k_max_dot_age_sec = 0.5;
-    const float max_age_ticks = ffcast<float>(k_max_dot_age_sec / rms_sample_period_sec);
+    const auto max_age_ticks = ffcast<float>(k_max_dot_age_sec / rms_sample_period_sec);
 
     constexpr float sigma = ifcast<float>(k_pixel_per_db) * 0.75;
     constexpr float two_sigma_sq = 2.f * sigma * sigma;
@@ -121,7 +121,7 @@ void TransferCurveComponent::update_rms_dots(
         return k;
     }();
 
-    const int n = rms_matrix.extent(0);
+    const auto n = rms_matrix.extent(0);
     std::vector<float> buf(ucast(w * h), 0.f);
 
     for (int mx = 0; mx < n; ++mx) {
@@ -130,18 +130,18 @@ void TransferCurveComponent::update_rms_dots(
             if (stamp == INT_MIN)
                 continue;
 
-            const float age = ifcast<float>(rms_matrix_clock - stamp);
-            const float intensity = std::max(0.f, (max_age_ticks - age) / max_age_ticks);
+            const auto age = ifcast<float>(rms_matrix_clock - stamp);
+            const auto intensity = std::max(0.f, (max_age_ticks - age) / max_age_ticks);
             if (intensity <= 0.f)
                 continue;
 
-            const int cx = mx * k_pixel_per_db;
-            const int cy = h - my * k_pixel_per_db;
+            const auto cx = mx * k_pixel_per_db;
+            const auto cy = h - my * k_pixel_per_db;
 
-            const int dy_min = std::max(-radius, -cy);
-            const int dy_max = std::min(radius, h - 1 - cy);
-            const int dx_min = std::max(-radius, -cx);
-            const int dx_max = std::min(radius, w - 1 - cx);
+            const auto dy_min = std::max(-radius, -cy);
+            const auto dy_max = std::min(radius, h - 1 - cy);
+            const auto dx_min = std::max(-radius, -cx);
+            const auto dx_max = std::min(radius, w - 1 - cx);
 
             for (int dy = dy_min; dy <= dy_max; ++dy)
                 for (int dx = dx_min; dx <= dx_max; ++dx)
