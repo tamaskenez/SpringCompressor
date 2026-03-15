@@ -53,7 +53,27 @@ SpringCompressorProcessor::SpringCompressorProcessor()
       &(rms_matrix_as_mdspan[k_rms_matrix_size - 1, k_rms_matrix_size - 1]) - rms_matrix.data() + 1, rms_matrix.size()
     ));
 
-    for (auto* id : {"threshold", "ratio", "makeup", "reference_level", "knee_width"})
+    for (auto* id : {"threshold",
+                     "ratio",
+                     "makeup",
+                     "reference_level",
+                     "knee_width",
+                     "level_method",
+                     "levellpf_mode",
+                     "levellpf_order",
+                     "levellpf_attack",
+                     "levellpf_release",
+                     "levelmb_freqlo",
+                     "levelmb_freqhi",
+                     "levelmb_peroctave",
+                     "levelmb_order",
+                     "levelmb_lporder",
+                     "levelmb_lpratio",
+                     "levelmb_minrelease",
+                     "grlp_enable",
+                     "grlp_order",
+                     "grlp_attack",
+                     "grlp_release"})
         apvts.addParameterListener(id, this);
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
 }
@@ -111,6 +131,39 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
         juce::AudioParameterFloatAttributes{}.withLabel("dB")
       )
     );
+
+    auto make_choice = [&](const char* id, juce::StringArray choices) {
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{id, 1}, id, choices, 0));
+    };
+    auto make_skewed_float = [&](const char* id, float min, float max, float step, float centre, float def) {
+        auto r = juce::NormalisableRange<float>(min, max, step);
+        r.setSkewForCentre(centre);
+        params.push_back(
+          std::make_unique<juce::AudioParameterFloat>(
+            juce::ParameterID{id, 1}, id, r, def, juce::AudioParameterFloatAttributes{}
+          )
+        );
+    };
+
+    make_choice("level_method", {"direct", "lpf", "mb"});
+
+    make_choice("levellpf_mode", {"amp", "rms"});
+    make_choice("levellpf_order", {"1", "2"});
+    make_skewed_float("levellpf_attack", 0.f, 50.f, 0.1f, 10.f, 10.f);
+    make_skewed_float("levellpf_release", 0.f, 2000.f, 1.f, 100.f, 100.f);
+
+    make_skewed_float("levelmb_freqlo", 20.f, 1000.f, 1.f, 100.f, 100.f);
+    make_skewed_float("levelmb_freqhi", 1000.f, 12000.f, 1.f, 3000.f, 3000.f);
+    make_skewed_float("levelmb_peroctave", 0.5f, 6.f, 0.1f, 2.f, 2.f);
+    make_choice("levelmb_order", {"1", "2"});
+    make_choice("levelmb_lporder", {"1", "2"});
+    make_skewed_float("levelmb_lpratio", 0.1f, 10.f, 0.01f, 2.f, 2.f);
+    make_skewed_float("levelmb_minrelease", 0.f, 50.f, 0.1f, 10.f, 10.f);
+
+    make_choice("grlp_enable", {"off", "mag", "pow", "db"});
+    make_choice("grlp_order", {"1", "2"});
+    make_skewed_float("grlp_attack", 0.f, 50.f, 0.1f, 10.f, 10.f);
+    make_skewed_float("grlp_release", 0.f, 2000.f, 1.f, 100.f, 100.f);
 
     return {params.begin(), params.end()};
 }
