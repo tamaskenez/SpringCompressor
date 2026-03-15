@@ -87,6 +87,8 @@ SpringCompressorEditor::SpringCompressorEditor(
     addAndMakeVisible(scope);
 
     setSize(800, 20 + 120 + 16 * 28);
+
+    draw_scope_grid(0, 100, 0, 2, 10, .1f);
 }
 
 void SpringCompressorEditor::paint(juce::Graphics& g)
