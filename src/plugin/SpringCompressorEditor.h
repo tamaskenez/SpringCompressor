@@ -26,21 +26,14 @@ public:
 
 private:
     std::atomic<bool>& editor_open;
-    juce::Slider thresholdSlider, ratioSlider, attackSlider, releaseSlider, makeupSlider, referenceLevelSlider,
-      kneeWidthSlider;
-    juce::Label thresholdLabel, ratioLabel, attackLabel, releaseLabel, makeupLabel, referenceLevelLabel, kneeWidthLabel;
-
-    juce::ComboBox gainFilterComboBox;
-    juce::Label gainFilterLabel;
+    juce::Slider thresholdSlider, ratioSlider, makeupSlider, referenceLevelSlider, kneeWidthSlider;
+    juce::Label thresholdLabel, ratioLabel, makeupLabel, referenceLevelLabel, kneeWidthLabel;
 
     TransferCurveComponent transfer_curve_component;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    SliderAttachment thresholdAttachment, ratioAttachment, attackAttachment, releaseAttachment, makeupAttachment,
-      referenceLevelAttachment, kneeWidthAttachment;
-
-    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    std::unique_ptr<ComboBoxAttachment> gainFilterAttachment;
+    SliderAttachment thresholdAttachment, ratioAttachment, makeupAttachment, referenceLevelAttachment,
+      kneeWidthAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorEditor)
 };

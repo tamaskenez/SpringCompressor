@@ -92,8 +92,7 @@ private:
     std::unique_ptr<Engine> engine;
     struct RawParameterValues {
         using float_pointer = std::atomic<float>*;
-        float_pointer threshold_db, ratio, attack_ms, release_ms, makeup_gain_db, reference_level_db, knee_width_db,
-          gain_control_application;
+        float_pointer threshold_db, ratio, makeup_gain_db, reference_level_db, knee_width_db;
     } raw_parameter_values;
 
     moodycamel::ReaderWriterQueue<AudioToUIMsg::V> audio_to_ui_queue;

@@ -5,7 +5,6 @@
 #include "engine.h"
 #include "util.h"
 
-#include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
 #include <meadow/math.h>
 #include <meadow/matlab.h>
@@ -40,12 +39,9 @@ SpringCompressorProcessor::SpringCompressorProcessor()
     , raw_parameter_values{
         .threshold_db = apvts.getRawParameterValue("threshold"),
         .ratio = apvts.getRawParameterValue("ratio"),
-        .attack_ms = apvts.getRawParameterValue("attack"),
-        .release_ms = apvts.getRawParameterValue("release"),
         .makeup_gain_db = apvts.getRawParameterValue("makeup"),
         .reference_level_db = apvts.getRawParameterValue("reference_level"),
-        .knee_width_db = apvts.getRawParameterValue("knee_width"),
-        .gain_control_application = apvts.getRawParameterValue("gain_filter")
+        .knee_width_db = apvts.getRawParameterValue("knee_width")
     }
     , rms_matrix(square(k_rms_matrix_size), INT_MIN)
     , rms_matrix_as_mdspan(rms_matrix.data(), k_rms_matrix_size, k_rms_matrix_size)
@@ -57,8 +53,7 @@ SpringCompressorProcessor::SpringCompressorProcessor()
       &(rms_matrix_as_mdspan[k_rms_matrix_size - 1, k_rms_matrix_size - 1]) - rms_matrix.data() + 1, rms_matrix.size()
     ));
 
-    for (auto* id :
-         {"threshold", "ratio", "attack", "release", "makeup", "reference_level", "knee_width", "gain_filter"})
+    for (auto* id : {"threshold", "ratio", "makeup", "reference_level", "knee_width"})
         apvts.addParameterListener(id, this);
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
 }
@@ -84,30 +79,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
         juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f, 0.5f),
         4.0f,
         juce::AudioParameterFloatAttributes{}.withLabel(":1")
-      )
-    );
-
-    auto attack_range = juce::NormalisableRange<float>(0.0f, 200.0f, 0.01f);
-    attack_range.setSkewForCentre(10.0f);
-    params.push_back(
-      std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"attack", 1},
-        "Attack",
-        attack_range,
-        10.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel("ms")
-      )
-    );
-
-    auto release_range = juce::NormalisableRange<float>(1.0f, 2000.0f, 0.1f);
-    release_range.setSkewForCentre(100.0f);
-    params.push_back(
-      std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{"release", 1},
-        "Release",
-        release_range,
-        100.0f,
-        juce::AudioParameterFloatAttributes{}.withLabel("ms")
       )
     );
 
@@ -138,15 +109,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
         juce::NormalisableRange<float>(0.0f, 40.0f, 0.1f),
         0.0f,
         juce::AudioParameterFloatAttributes{}.withLabel("dB")
-      )
-    );
-
-    params.push_back(
-      std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID{"gain_filter", 1},
-        "Gain filter",
-        juce::StringArray{"Input mag", "Input pow", "GR dB", "GR mag"},
-        1
       )
     );
 
