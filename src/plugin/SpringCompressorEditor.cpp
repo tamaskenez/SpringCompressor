@@ -85,7 +85,7 @@ SpringCompressorEditor::SpringCompressorEditor(
 
     addAndMakeVisible(transfer_curve_component);
 
-    setSize(800, 20 + 120 + 16 * 28 + TransferCurveComponent::k_window_size);
+    setSize(800, 20 + 120 + 16 * 28);
 }
 
 void SpringCompressorEditor::paint(juce::Graphics& g)
@@ -97,12 +97,12 @@ void SpringCompressorEditor::resized()
 {
     auto area = getLocalBounds().reduced(10);
 
-    // Bottom: transfer curve
-    const auto curve_area = area.removeFromBottom(TransferCurveComponent::k_window_size);
-    const int sq = std::min(curve_area.getWidth(), curve_area.getHeight());
-    transfer_curve_component.setBounds(curve_area.withSizeKeepingCentre(sq, sq));
+    // Right column: transfer curve
+    auto right_col = area.removeFromRight(TransferCurveComponent::k_window_size);
+    const int sq = std::min(right_col.getWidth(), right_col.getHeight());
+    transfer_curve_component.setBounds(right_col.withSizeKeepingCentre(sq, sq));
 
-    // Top: rotary knobs (labels sit above via attachToComponent)
+    // Left column: rotary knobs (labels sit above via attachToComponent)
     {
         auto rotary_area = area.removeFromTop(120).withTrimmedTop(24);
         const int w = rotary_area.getWidth() / 5;
