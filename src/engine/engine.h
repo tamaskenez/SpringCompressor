@@ -75,6 +75,7 @@ public:
     process_block_with_trace(std::span<float* const> channel_data, int num_samples, std::vector<Trace>& trace) = 0;
     virtual void release_resources() = 0;
     virtual void reset() = 0; // Reset to the state as if were after prepare_to_play.
+    virtual void set_debug_mode(bool debug_mode_arg) = 0;
 
     enum class SetParsResult {
         transfer_curve_didnt_change,

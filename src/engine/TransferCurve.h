@@ -51,6 +51,11 @@ public:
     TransferCurveState set(const TransferCurvePars& pars);
 
     [[nodiscard]] double gain_db_for_input_db(double input_db) const;
+    [[nodiscard]] double gain_db_for_input_db_without_makeup(double input_db) const;
+    [[nodiscard]] double get_makeup_gain_below_threshold_db() const
+    {
+        return makeup_gain_below_threshold_db;
+    }
 
     TransferCurveState get_state() const;
 

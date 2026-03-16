@@ -4,6 +4,7 @@
 #include "RecursiveCrossoverRMSDetector.h"
 #include "RmsDetector.h"
 #include "TransferCurve.h"
+#include "meadow/math.h"
 
 #include <meadow/matlab.h>
 #include <meadow/ranges.h>
@@ -14,6 +15,24 @@
 namespace
 {
 constexpr double k_rms_detector_hz = 2.1;
+
+template<class T>
+bool is_normal_or_zero(T x)
+{
+    switch (std::fpclassify(x)) {
+    case FP_INFINITE:
+    case FP_NAN:
+    case FP_SUBNORMAL:
+        return false;
+    case FP_NORMAL:
+    case FP_ZERO:
+        return true;
+    default:
+        assert(false);
+        return false;
+    }
+}
+
 } // namespace
 
 struct EngineImpl : public Engine {
@@ -35,6 +54,8 @@ struct EngineImpl : public Engine {
     int rms_sample_counter = 0;
     int rms_sample_counter_period = 100;
     std::vector<AF2> rms_samples; // [0] is input, [1] is output.
+
+    bool debug_mode = false;
 
     void set_input_level_lpf(double sample_rate_arg)
     {
@@ -81,7 +102,7 @@ struct EngineImpl : public Engine {
         }
         const auto release_time_samples = pars.gr_filter.release_time_sec * sample_rate_arg;
         gr_filter = EnvelopeFilter<double>(
-          EnvelopeFilterOutputType::amplitude, pars.gr_filter.order, attack_time_samples, release_time_samples
+          EnvelopeFilterOutputType::lowpass, pars.gr_filter.order, attack_time_samples, release_time_samples
         );
     }
 
@@ -120,8 +141,51 @@ struct EngineImpl : public Engine {
         sidechain_buf = vector<double>();
     }
 
+    void debug_verify_samples(span<const double> samples) const
+    {
+#ifndef NDEBUG
+        if (debug_mode) {
+            for (auto x : samples) {
+                assert(is_normal_or_zero(x) && std::abs(x) <= 1.0);
+            }
+        }
+#endif
+    }
+
+    void debug_verify_decibels(span<const double> samples) const
+    {
+#ifndef NDEBUG
+        if (debug_mode) {
+            for (auto x : samples) {
+                assert(is_normal_or_zero(x) && x <= 0.0);
+            }
+        }
+#endif
+    }
+
+    void debug_verify_gain_values(span<const double> samples) const
+    {
+#ifndef NDEBUG
+        if (debug_mode) {
+            for (auto x : samples) {
+                assert(is_normal_or_zero(x) && 0 < x && x <= 1.0);
+            }
+        }
+#endif
+    }
+
     void process_block(std::span<float* const> channel_data, int num_samples) override
     {
+#ifndef NDEBUG
+        if (debug_mode) {
+            for (auto chd : channel_data) {
+                for (int i = 0; i < num_samples; i++) {
+                    const float x = chd[i];
+                    assert(is_normal_or_zero(x) && std::abs(x) <= 1.0f);
+                }
+            }
+        }
+#endif
         if (!prepared_to_play) {
             assert(false);
             return;
@@ -178,74 +242,108 @@ struct EngineImpl : public Engine {
         // First, convert it to an input level and apply the transfer curve.
         switch (pars.input_level_method) {
         case EnginePars::InputLevelMethod::direct:
+            debug_verify_samples(sidechain_buf);
             for (auto& s : sidechain_buf) {
-                s = transfer_curve.gain_db_for_input_db(matlab::mag2db(std::abs(s)));
+                s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::mag2db(std::abs(s)));
             }
             break;
         case EnginePars::InputLevelMethod::lpf:
             input_level_lpf.process(sidechain_buf);
+            debug_verify_samples(sidechain_buf);
             if (pars.input_level_lpf.rms) {
                 for (auto& s : sidechain_buf) {
-                    s = transfer_curve.gain_db_for_input_db(matlab::pow2db(s));
+                    s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::pow2db(s));
                 }
             } else {
                 for (auto& s : sidechain_buf) {
-                    s = transfer_curve.gain_db_for_input_db(matlab::mag2db(s));
+                    s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::mag2db(s));
                 }
             }
             break;
         case EnginePars::InputLevelMethod::multiband:
             prepared_to_play->input_level_multiband.process(sidechain_buf);
+            debug_verify_samples(sidechain_buf);
             for (auto& s : sidechain_buf) {
-                s = transfer_curve.gain_db_for_input_db(matlab::pow2db(s));
+                const auto s0 = transfer_curve.gain_db_for_input_db_without_makeup(matlab::pow2db(s));
+                assert(s0 <= 0);
+                s = std::min(s0, 0.0);
             }
             break;
         }
+
+        debug_verify_decibels(sidechain_buf);
 
         // Apply GR-filtering.
         switch (pars.gr_filter_mode) {
         case EnginePars::GRFilterMode::off:
             for (auto& s : sidechain_buf) {
-                s = matlab::db2mag(s);
+                const auto s0 = matlab::db2mag(s);
+                assert(in_cc_range(s0, 0, 1));
+                s = clamp(s0, 0.0, 1.0);
             }
             // At this point, sidechain_buf contains linear gain values.
             break;
         case EnginePars::GRFilterMode::mag:
+            // Map the -INF .. 0 dB range to 1 .. 0 (reverse) because the 0 dB = 1.0 is the "no-signal" value.
             for (auto& s : sidechain_buf) {
-                s = matlab::db2mag(s);
+                const auto s0 = 1 - matlab::db2mag(s);
+                assert(in_cc_range(s0, 0, 1));
+                s = clamp(s0, 0.0, 1.0);
             }
+            // At this point, sidechain_buf contains linear gain values.
             // Note: gr filter should be set up for amplitude filtering.
             gr_filter.process(sidechain_buf);
+            // Reverse back.
+            for (auto& s : sidechain_buf) {
+                const auto s0 = 1 - s;
+                assert(in_cc_range(s0, 0, 1));
+                s = clamp(s0, 0.0, 1.0);
+            }
             // At this point, sidechain_buf contains linear gain values.
             break;
         case EnginePars::GRFilterMode::pow:
+            // Map the -INF .. 0 dB range to 1 .. 0 (reverse) because the 0 dB = 1.0 is the "no-signal" value.
             for (auto& s : sidechain_buf) {
-                s = matlab::db2pow(s);
+                const auto s0 = 1 - matlab::db2pow(s);
+                assert(in_cc_range(s0, 0, 1));
+                s = clamp(s0, 0.0, 1.0);
             }
             // Note: gr filter should be set up for amplitude filtering to prevent squaring the already squared
             // signal.
             gr_filter.process(sidechain_buf);
             // At this point, sidechain_buf contains squared gain values.
+            // Reverse back.
             for (auto& s : sidechain_buf) {
-                s = sqrt(s);
+                const auto s0 = 1 - s;
+                assert(in_cc_range(s0, 0, 1));
+                s = sqrt(clamp(s0, 0.0, 1.0));
             }
             // At this point, sidechain_buf contains linear gain values.
             break;
         case EnginePars::GRFilterMode::db:
             // Note: gr filter should be set up for amplitude filtering.
-            gr_filter.process(sidechain_buf);
-            // At this point, sidechain_buf contains dB gain values.
-            for (auto& s : sidechain_buf) {
-                s = matlab::db2mag(s);
+            // TODO: remove this
+            {
+                const auto before = sidechain_buf;
+                gr_filter.process(sidechain_buf);
+                // At this point, sidechain_buf contains dB gain values.
+                for (auto& s : sidechain_buf) {
+                    const auto s0 = matlab::db2mag(s);
+                    assert(s0 <= 1);
+                    s = std::min(s0, 1.0);
+                }
             }
             // At this point, sidechain_buf contains linear gain values.
             break;
         }
         // At this point, sidechain_buf contains linear gain values.
+        debug_verify_gain_values(sidechain_buf);
+
         // Apply linear gain to channel data.
+        const auto make_up_gain_linear = matlab::db2mag(transfer_curve.get_makeup_gain_below_threshold_db());
         for (auto chd : channel_data) {
             for (unsigned i = 0; i < sucast(num_samples); ++i) {
-                chd[i] = ffcast<float>(chd[i] * sidechain_buf[i]);
+                chd[i] = ffcast<float>(chd[i] * sidechain_buf[i] * make_up_gain_linear);
             }
         }
 
@@ -339,6 +437,11 @@ struct EngineImpl : public Engine {
         input_rms.reset();
         output_rms.reset();
         rms_samples.clear();
+    }
+
+    void set_debug_mode(bool debug_mode_arg) override
+    {
+        debug_mode = debug_mode_arg;
     }
 };
 

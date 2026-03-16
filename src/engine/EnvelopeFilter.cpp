@@ -16,13 +16,14 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
 )
     : output_type(output_type_arg)
 {
-    bool use_power = false;
+    bool square_input = false;
     switch (output_type) {
     case EnvelopeFilterOutputType::amplitude:
+    case EnvelopeFilterOutputType::lowpass:
         break;
     case EnvelopeFilterOutputType::rms:
     case EnvelopeFilterOutputType::power:
-        use_power = true;
+        square_input = true;
         break;
     }
     switch (lpf_order) {
@@ -34,7 +35,7 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
               .attack_coeff =
                 exponential_moving_average_filter_coeff_from_cutoff_freq(samples_to_freq_hps(*attack_time_samples))
             };
-            if (use_power) {
+            if (square_input) {
                 f_process = t_process<true, 1, true>;
             } else {
                 f_process = t_process<false, 1, true>;
@@ -44,7 +45,7 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
               .release_coeff =
                 exponential_moving_average_filter_coeff_from_cutoff_freq(samples_to_freq_hps(release_time_samples))
             };
-            if (use_power) {
+            if (square_input) {
                 f_process = t_process<true, 1, false>;
             } else {
                 f_process = t_process<false, 1, false>;
@@ -64,14 +65,14 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
             // `tau = 1 / (2 * pi * f)` formula.
             spring.set_critically_damped_with_cutoff_freq(fs / *attack_time_samples, fs / release_time_samples);
 
-            if (use_power) {
+            if (square_input) {
                 f_process = t_process<true, 2, true>;
             } else {
                 f_process = t_process<false, 2, true>;
             }
         } else {
             filter = Biquad_TDF2(critically_damped_second_order_lowpass(samples_to_freq_hps(release_time_samples)));
-            if (use_power) {
+            if (square_input) {
                 f_process = t_process<true, 2, false>;
             } else {
                 f_process = t_process<false, 2, false>;
@@ -86,16 +87,38 @@ EnvelopeFilter<IOFloat>::EnvelopeFilter(
 template<class IOFloat>
 void EnvelopeFilter<IOFloat>::process(span<IOFloat> samples)
 {
+    switch (output_type) {
+    case EnvelopeFilterOutputType::amplitude:
+        for (auto& x : samples) {
+            x = std::abs(x);
+        }
+        break;
+    case EnvelopeFilterOutputType::rms:
+    case EnvelopeFilterOutputType::power:
+    case EnvelopeFilterOutputType::lowpass:
+        break;
+    }
     if (f_process) {
-        f_process(this, samples, output_type == EnvelopeFilterOutputType::rms);
+        f_process(this, samples);
     } else {
         assert(false); // Calling process on default-initialized object.
+    }
+    switch (output_type) {
+    case EnvelopeFilterOutputType::rms:
+        for (auto& x : samples) {
+            x = sqrt(x);
+        }
+        break;
+    case EnvelopeFilterOutputType::amplitude:
+    case EnvelopeFilterOutputType::power:
+    case EnvelopeFilterOutputType::lowpass:
+        break;
     }
 }
 
 template<class IOFloat>
-template<bool t_use_power, int t_order, bool t_asymmetric>
-void EnvelopeFilter<IOFloat>::t_process(EnvelopeFilter* that, span<IOFloat> samples, bool take_sqrt)
+template<bool t_square_input, int t_order, bool t_asymmetric>
+void EnvelopeFilter<IOFloat>::t_process(EnvelopeFilter* that, span<IOFloat> samples)
 {
     // Extract the appropriate type from the variant.
     ExponentialMovingAverage* ema{};
@@ -117,10 +140,10 @@ void EnvelopeFilter<IOFloat>::t_process(EnvelopeFilter* that, span<IOFloat> samp
     for (auto& x : samples) {
         // Apply abs or square on the input sample.
         double xx;
-        if constexpr (t_use_power) {
-            xx = square(x);
+        if constexpr (t_square_input) {
+            xx = square(ffcast<double>(x));
         } else {
-            xx = std::abs(x);
+            xx = ffcast<double>(x);
         }
 
         // Apply the low-pass filter.
@@ -145,12 +168,6 @@ void EnvelopeFilter<IOFloat>::t_process(EnvelopeFilter* that, span<IOFloat> samp
         }
 
         x = ffcast<IOFloat>(y);
-    }
-    // Apply sqrt if necessary on the output sample.
-    if (take_sqrt) {
-        for (auto& x : samples) {
-            x = sqrt(x);
-        }
     }
 }
 

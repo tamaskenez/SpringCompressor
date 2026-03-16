@@ -39,6 +39,11 @@ TransferCurveState TransferCurve::set(const TransferCurvePars& p)
 
 double TransferCurve::gain_db_for_input_db(double input_db) const
 {
+    return gain_db_for_input_db_without_makeup(input_db) + makeup_gain_below_threshold_db;
+}
+
+double TransferCurve::gain_db_for_input_db_without_makeup(double input_db) const
+{
     double result = 0;
     if (input_db <= pars.threshold_db) {
         NOP;
@@ -48,7 +53,7 @@ double TransferCurve::gain_db_for_input_db(double input_db) const
         result = (input_db - pars.threshold_db - pars.knee_width_db) / pars.ratio
                + output_db_without_makeup_right_of_knee - input_db;
     }
-    return result + makeup_gain_below_threshold_db;
+    return result;
 }
 
 TransferCurveState TransferCurve::get_state() const

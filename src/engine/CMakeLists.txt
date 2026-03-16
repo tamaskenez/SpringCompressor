@@ -6,7 +6,7 @@ add_library(SpringCompressorEngine STATIC ${sources})
 target_include_directories(SpringCompressorEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(SpringCompressorEngine
-    PRIVATE
+    PUBLIC
         meadow::meadow
         readerwriterqueue::readerwriterqueue
 )
