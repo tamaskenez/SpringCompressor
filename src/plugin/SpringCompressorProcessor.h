@@ -99,6 +99,7 @@ private:
         float_pointer levelmb_freqlo, levelmb_freqhi, levelmb_peroctave, levelmb_order, levelmb_lporder,
           levelmb_lpratio, levelmb_minrelease;
         float_pointer grlp_enable, grlp_order, grlp_attack, grlp_release;
+        float_pointer scope_mode, scope_freq;
     } raw_parameter_values;
 
     moodycamel::ReaderWriterQueue<AudioToUIMsg::V> audio_to_ui_queue;
@@ -127,6 +128,7 @@ private:
     void sync_engine_processor(bool called_from_audio_thread);
     void editor_set_transfer_curve(const TransferCurveState& tcs);
     EnginePars query_raw_parameter_values_into_EnginePars();
+    void redraw_scope();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorProcessor)
 };

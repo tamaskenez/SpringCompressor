@@ -75,6 +75,12 @@ public:
     void draw_scope_grid(float min_x, float max_x, float min_y, float max_y, float x_step, float y_step);
     void add_plot_to_scope(span<AF2> plot, const juce::Colour& color);
 
+    void set_scope_freq_values(vector<float> freqs)
+    {
+        scope_freq_values = MOVE(freqs);
+        scope_freq.updateText();
+    }
+
 private:
     std::atomic<bool>& editor_open;
 
@@ -89,12 +95,17 @@ private:
     // Radio button groups
     RadioButtonGroup level_method, levellpf_mode, levellpf_order, levelmb_order, levelmb_lporder, grlp_enable,
       grlp_order;
+    RadioButtonGroup scope_mode;
+
+    // New sliders for scope controls (declaration must precede SliderAttachment below)
+    juce::Slider scope_freq;
 
     // Labels for new controls
     juce::Label level_method_label, levellpf_mode_label, levellpf_order_label, levellpf_attack_label,
       levellpf_release_label, levelmb_freqlo_label, levelmb_freqhi_label, levelmb_peroctave_label, levelmb_order_label,
       levelmb_lporder_label, levelmb_lpratio_label, levelmb_minrelease_label, grlp_enable_label, grlp_order_label,
       grlp_attack_label, grlp_release_label;
+    juce::Label scope_mode_label, scope_freq_label;
 
     TransferCurveComponent transfer_curve_component;
     ScopeComponent scope;
@@ -105,6 +116,9 @@ private:
     SliderAttachment levellpf_attack_attachment, levellpf_release_attachment, levelmb_freqlo_attachment,
       levelmb_freqhi_attachment, levelmb_peroctave_attachment, levelmb_lpratio_attachment,
       levelmb_minrelease_attachment, grlp_attack_attachment, grlp_release_attachment;
+    SliderAttachment scope_freq_attachment;
+
+    vector<float> scope_freq_values;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpringCompressorEditor)
 };

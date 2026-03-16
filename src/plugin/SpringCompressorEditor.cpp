@@ -12,6 +12,7 @@ SpringCompressorEditor::SpringCompressorEditor(
     , levelmb_lporder(apvts, "levelmb_lporder")
     , grlp_enable(apvts, "grlp_enable")
     , grlp_order(apvts, "grlp_order")
+    , scope_mode(apvts, "scope_mode")
     , thresholdAttachment(apvts, "threshold", thresholdSlider)
     , ratioAttachment(apvts, "ratio", ratioSlider)
     , makeupAttachment(apvts, "makeup", makeupSlider)
@@ -26,6 +27,7 @@ SpringCompressorEditor::SpringCompressorEditor(
     , levelmb_minrelease_attachment(apvts, "levelmb_minrelease", levelmb_minrelease)
     , grlp_attack_attachment(apvts, "grlp_attack", grlp_attack)
     , grlp_release_attachment(apvts, "grlp_release", grlp_release)
+    , scope_freq_attachment(apvts, "scope_freq", scope_freq)
 {
     auto setup_rotary = [this](juce::Slider& slider, juce::Label& label, const juce::String& text) {
         slider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
@@ -58,8 +60,34 @@ SpringCompressorEditor::SpringCompressorEditor(
     setup_hslider(grlp_release);
 
     for (auto* rb :
-         {&level_method, &levellpf_mode, &levellpf_order, &levelmb_order, &levelmb_lporder, &grlp_enable, &grlp_order})
+         {&level_method,
+          &levellpf_mode,
+          &levellpf_order,
+          &levelmb_order,
+          &levelmb_lporder,
+          &grlp_enable,
+          &grlp_order,
+          &scope_mode})
         addAndMakeVisible(*rb);
+
+    setup_hslider(scope_freq);
+    // Display approximate frequency in Hz: scope_freq=0..1 linearly indexes log-spaced freqs 40..12000 Hz.
+    scope_freq.textFromValueFunction = [this](double v) -> juce::String {
+        if (scope_freq_values.empty()) {
+            return "";
+        }
+        const auto freq_ix =
+          std::min(ifloor<size_t>(ifcast<double>(scope_freq_values.size()) * v), scope_freq_values.size() - 1);
+        auto f = scope_freq_values[freq_ix];
+        if (f < 100) {
+            f = round(f * 100) / 100;
+        } else if (f < 1000) {
+            f = round(f * 10) / 10;
+        } else {
+            f = round(f);
+        }
+        return juce::String(format("{}", f));
+    };
 
     auto setup_label = [this](juce::Label& l, const char* text) {
         l.setText(text, juce::dontSendNotification);
@@ -82,11 +110,13 @@ SpringCompressorEditor::SpringCompressorEditor(
     setup_label(grlp_order_label, "grlp_order");
     setup_label(grlp_attack_label, "grlp_attack");
     setup_label(grlp_release_label, "grlp_release");
+    setup_label(scope_mode_label, "scope_mode");
+    setup_label(scope_freq_label, "scope_freq");
 
     addAndMakeVisible(transfer_curve_component);
     addAndMakeVisible(scope);
 
-    setSize(800, 20 + 120 + 16 * 28);
+    setSize(800, 20 + 120 + 18 * 28);
 
     draw_scope_grid(0, 100, 0, 2, 10, .1f);
 }
@@ -140,6 +170,8 @@ void SpringCompressorEditor::resized()
     layout(grlp_order_label, grlp_order);
     layout(grlp_attack_label, grlp_attack);
     layout(grlp_release_label, grlp_release);
+    layout(scope_mode_label, scope_mode);
+    layout(scope_freq_label, scope_freq);
 }
 
 void SpringCompressorEditor::draw_scope_grid(

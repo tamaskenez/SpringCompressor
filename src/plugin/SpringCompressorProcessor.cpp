@@ -58,7 +58,9 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .grlp_enable = apvts.getRawParameterValue("grlp_enable"),
         .grlp_order = apvts.getRawParameterValue("grlp_order"),
         .grlp_attack = apvts.getRawParameterValue("grlp_attack"),
-        .grlp_release = apvts.getRawParameterValue("grlp_release")
+        .grlp_release = apvts.getRawParameterValue("grlp_release"),
+        .scope_mode = apvts.getRawParameterValue("scope_mode"),
+        .scope_freq = apvts.getRawParameterValue("scope_freq")
     }
     , rms_matrix(square(k_rms_matrix_size), INT_MIN)
     , rms_matrix_as_mdspan(rms_matrix.data(), k_rms_matrix_size, k_rms_matrix_size)
@@ -90,7 +92,9 @@ SpringCompressorProcessor::SpringCompressorProcessor()
                      "grlp_enable",
                      "grlp_order",
                      "grlp_attack",
-                     "grlp_release"})
+                     "grlp_release",
+                     "scope_mode",
+                     "scope_freq"})
         apvts.addParameterListener(id, this);
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
 }
@@ -181,6 +185,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
     make_choice("grlp_order", {"1", "2"});
     make_skewed_float("grlp_attack", 0.f, 50.f, 0.1f, 10.f, 10.f);
     make_skewed_float("grlp_release", 0.f, 2000.f, 1.f, 100.f, 100.f);
+
+    make_choice("scope_mode", {"transfer", "attack", "release", "hdist", "inhdist", "threshold"});
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"scope_freq", 1}, "scope_freq", 0.0f, 1.0f, 0.0f)
+    );
 
     return {params.begin(), params.end()};
 }
@@ -281,13 +290,16 @@ void SpringCompressorProcessor::parameterChanged(UNUSED const juce::String& name
         return;
     }
 
-    parameter_changed_was_called = true;
-    if (!audio_thread_running) {
-        // Handle it now.
-        sync_engine_processor(false);
+    if (name == "scope_mode" || name == "scope_freq") {
+        redraw_scope();
+    } else {
+        parameter_changed_was_called = true;
+        if (!audio_thread_running) {
+            // Handle it now.
+            sync_engine_processor(false);
+        }
+        scope_data_generator_thread.start_testing(query_raw_parameter_values_into_EnginePars());
     }
-
-    scope_data_generator_thread.start_testing(query_raw_parameter_values_into_EnginePars());
 }
 
 void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -441,18 +453,62 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
     if (completed_request && completed_request->request_id != last_scoped_data_drawn_request_id) {
         println("Received request {}", completed_request->request_id);
         last_scoped_data_drawn_request_id = completed_request->request_id;
-        if (auto* editor = this->getActiveEditor()) {
-            UNUSED auto* e = dynamic_cast<SpringCompressorEditor*>(editor);
+        redraw_scope();
+    }
+}
 
-            auto& sd = completed_request->scope_data;
+void SpringCompressorProcessor::redraw_scope()
+{
+    auto* editor = this->getActiveEditor();
+    if (!editor) {
+        return;
+    }
+
+    auto* e = dynamic_cast<SpringCompressorEditor*>(editor);
+    auto completed_request = scope_data_generator_thread.try_get_completed_request();
+    if (!completed_request) {
+        assert(false);
+        return;
+    }
+
+    auto& sd = completed_request->scope_data;
+
+    switch (iround<int>(raw_parameter_values.scope_mode->load())) {
+    case 0:
+        // transfer
+        {
             auto& tg = sd.transfer_graph;
             {
-                assert(!tg.transfers_by_freq.empty());
-                auto& g = tg.transfers_by_freq[0];
+                vector<float> sfv;
+                sfv.reserve(tg.transfers_by_freq.size());
+                for (auto& x : tg.transfers_by_freq) {
+                    sfv.push_back(x.freq_hz);
+                }
+                e->set_scope_freq_values(sfv);
+            }
+            if (!tg.transfers_by_freq.empty()) {
+                const auto freq_percent = raw_parameter_values.scope_freq->load();
+                const auto freq_ix = std::min(
+                  ifloor<size_t>(freq_percent * ifcast<float>(tg.transfers_by_freq.size())),
+                  tg.transfers_by_freq.size() - 1
+                );
+                auto& g = tg.transfers_by_freq[freq_ix];
                 e->draw_scope_grid(-60, 0, -60, 0, 10, 10);
                 e->add_plot_to_scope(g.input_output_db, juce::Colours::white);
             }
         }
+        break;
+    case 1: // attack
+        break;
+    case 2: // release
+        break;
+    case 3: // hdist
+        break;
+    case 4: // inhdist
+        break;
+    case 5: // threshold
+        break;
+    default:
     }
 }
 
