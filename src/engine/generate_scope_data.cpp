@@ -14,6 +14,7 @@ constexpr double k_lowest_test_freq = 40.0;
 constexpr double k_highest_test_freq = 12000;
 constexpr double k_sample_rate = 48000;
 constexpr double k_stable_gain_max_db_per_sec = 0.1;
+constexpr int k_num_periods_to_wait_until_announced_stable = 12;
 
 double sum_of_squares(const vector<float>& xs)
 {
@@ -46,7 +47,7 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
     const auto k_3_db = matlab::pow2db(2.0);
     const auto min_rms_db = ifloor<int>(pars.transfer_curve.threshold_db - k_3_db);
     vector<StableGainTestResult> results;
-    for (int rms_db = 0; rms_db >= min_rms_db; rms_db -= k_dbs_per_test_level) {
+    for (int rms_db = -3; rms_db >= min_rms_db; rms_db -= k_dbs_per_test_level) {
         // Generate one period of input signal.
         vector<float> input_signal_one_period;
         input_signal_one_period.reserve(sucast(T));
@@ -64,7 +65,8 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
             waiting_for_stable_gain
         } phase = Phase::waiting_for_compression;
         optional<int> samples_until_compression, samples_until_stable_gain;
-        double prev_min_gain = 1.0;
+        optional<int> samples_until_gain_stopped_decreasing;
+        double min_gain_so_far = 1.0;
         engine->reset();
 
         // Feed input signal into the engine and check output.
@@ -100,20 +102,48 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
                 }
             } break;
             case Phase::waiting_for_stable_gain: {
-                const auto change_db_per_sec = abs(matlab::mag2db(prev_min_gain / min_gain)) / (T / k_sample_rate);
-                if (change_db_per_sec <= k_stable_gain_max_db_per_sec) {
-                    // Stable gain reached.
-                    samples_until_stable_gain = sample_ix;
-                } else {
+                const auto change_db_per_sec = matlab::mag2db(min_gain / min_gain_so_far) / (T / k_sample_rate);
+                if (change_db_per_sec < -k_stable_gain_max_db_per_sec) {
+#if 0
+                    static FILE*f{};
+                    if(sample_ix > *samples_until_compression + k_sample_rate) {
+                        if(!f) {
+                            f=fopen("/tmp/debug_stable_gain.m","w");
+                            assert(f);
+                            println(f, "A = [");
+                        }
+                        for(unsigned i=0;i<sucast(T);++i) {
+                            println(f,"{} {} {}",input_signal_one_period[i], buf[i], trace[i].gain);
+                        }
+                    }
+                    if(sample_ix >= *samples_until_compression + 2 * k_sample_rate) {
+                        assert(f);
+                        println(f,"];");
+                        fclose(f);
+                        NOP;
+                    }
+#endif
+
+                    samples_until_gain_stopped_decreasing = nullopt;
+
                     // Gain must be stable within 2 sec.
                     assert(sample_ix < *samples_until_compression + 2 * k_sample_rate);
+
+                } else {
+                    if (!samples_until_gain_stopped_decreasing) {
+                        samples_until_gain_stopped_decreasing = sample_ix;
+
+                    } else if (sample_ix - *samples_until_gain_stopped_decreasing
+                               > T * k_num_periods_to_wait_until_announced_stable) { // Is it stable for long enough?
+                        samples_until_stable_gain = sample_ix;
+                    }
                 }
             } break;
             }
             if (exit_loop || samples_until_stable_gain) {
                 break;
             }
-            prev_min_gain = min_gain;
+            min_gain_so_far = std::min(min_gain_so_far, min_gain);
         }
         if (samples_until_compression) {
             prev_samples_until_compression = *samples_until_compression;
