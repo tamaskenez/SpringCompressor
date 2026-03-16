@@ -247,15 +247,16 @@ struct EngineImpl : public Engine {
         rms_sample_counter = measure_rms(channel_data, output_rms, 1, rms_sample_counter);
     }
 
-    std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) override
+    void
+    process_block_with_trace(std::span<float* const> channel_data, int num_samples, std::vector<Trace>& trace) override
     {
         process_block(channel_data, num_samples);
         assert(cmp_equal(sidechain_buf.size(), num_samples));
-        std::vector<Trace> ts;
+        trace.clear();
+        trace.reserve(sidechain_buf.size());
         for (auto x : sidechain_buf) {
-            ts.push_back(Trace{.gain = x});
+            trace.push_back(Trace{.gain = x});
         }
-        return ts;
     }
 
     SetParsResult set_pars(const EnginePars& pars_arg) override
@@ -321,6 +322,17 @@ struct EngineImpl : public Engine {
     [[nodiscard]] const std::vector<AF2>& get_rms_samples_of_last_block() const override
     {
         return rms_samples;
+    }
+    void reset() override
+    {
+        if (prepared_to_play) {
+            prepared_to_play->input_level_multiband.reset();
+        }
+        input_level_lpf.reset();
+        gr_filter.reset();
+        input_rms.reset();
+        output_rms.reset();
+        rms_samples.clear();
     }
 };
 

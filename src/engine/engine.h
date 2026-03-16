@@ -64,15 +64,17 @@ class Engine
 {
 public:
     struct Trace {
-        double smoothed_signal_power = NAN, gain = NAN;
+        double gain = NAN;
     };
     virtual ~Engine() = default;
 
     virtual void prepare_to_play(double sampleRate, int maxBlockSize, int numChannels) = 0;
     // trace_block is for debugging, returns internal data for channel 0, only if !NDEBUG
     virtual void process_block(std::span<float* const> channel_data, int num_samples) = 0;
-    virtual std::vector<Trace> process_block_with_trace(std::span<float* const> channel_data, int num_samples) = 0;
+    virtual void
+    process_block_with_trace(std::span<float* const> channel_data, int num_samples, std::vector<Trace>& trace) = 0;
     virtual void release_resources() = 0;
+    virtual void reset() = 0; // Reset to the state as if were after prepare_to_play.
 
     enum class SetParsResult {
         transfer_curve_didnt_change,

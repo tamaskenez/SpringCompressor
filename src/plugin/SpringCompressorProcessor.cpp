@@ -3,6 +3,7 @@
 #include "SpringCompressorEditor.h"
 #include "TransferCurveComponent.h"
 #include "engine.h"
+#include "generate_scope_data.h"
 #include "util.h"
 
 #include <meadow/cppext.h>
@@ -285,6 +286,8 @@ void SpringCompressorProcessor::parameterChanged(UNUSED const juce::String& name
         // Handle it now.
         sync_engine_processor(false);
     }
+
+    UNUSED auto scope_data = generate_scope_data(query_raw_parameter_values_into_EnginePars());
 }
 
 void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)

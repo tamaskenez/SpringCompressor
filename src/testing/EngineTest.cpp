@@ -35,7 +35,8 @@ TEST(Engine, save_sine_compression)
 
     std::vector<float> output = input;
     float* channel = output.data();
-    auto trace_block = engine->process_block_with_trace(std::span<float* const>(&channel, 1), num_samples);
+    vector<Engine::Trace> trace_block;
+    engine->process_block_with_trace(std::span<float* const>(&channel, 1), num_samples, trace_block);
 
     std::ofstream file(TESTING_OUTPUT_DIR "/Engine_sine_compression.txt");
     ASSERT_TRUE(file.is_open());
