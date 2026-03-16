@@ -36,3 +36,19 @@ float RmsDetector::get_rms() const
 {
     return ffcast<float>(std::sqrt(mean_square));
 }
+
+void RmsDetector::reset()
+{
+    mean_square = 0.0;
+    std::visit(
+      overloaded{
+        [](double& d) {
+            d = 0.0;
+        },
+        [](Biquad_TDF2& b) {
+            b.reset();
+        }
+      },
+      filter
+    );
+}

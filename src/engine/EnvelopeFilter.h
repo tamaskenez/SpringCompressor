@@ -39,6 +39,8 @@ public:
     // The envelope values will be either RMS values (if use_power = true) or amplitude values (use_power = false)
     void process(std::span<IOFloat> samples);
 
+    void reset(); // Reset internal state to just after construction.
+
 private:
     OutputType output_type;
     // Function pointer for the type-erased templated process function.

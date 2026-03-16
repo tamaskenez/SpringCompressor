@@ -68,3 +68,9 @@ double SpringLowPass::process(double sample_in)
 
     return mass_position;
 }
+
+void SpringLowPass::reset()
+{
+    mass_position = 0.0;
+    mass_velocity = 0.0;
+}

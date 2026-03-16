@@ -154,5 +154,24 @@ void EnvelopeFilter<IOFloat>::t_process(EnvelopeFilter* that, span<IOFloat> samp
     }
 }
 
+template<class IOFloat>
+void EnvelopeFilter<IOFloat>::reset()
+{
+    std::visit(
+      overloaded{
+        [](ExponentialMovingAverage& ema) {
+            ema.state = 0.0;
+        },
+        [](Biquad_TDF2& biquad) {
+            biquad.reset();
+        },
+        [](SpringLowPass& spring_low_pass) {
+            spring_low_pass.reset();
+        }
+      },
+      filter
+    );
+}
+
 template class EnvelopeFilter<float>;
 template class EnvelopeFilter<double>;

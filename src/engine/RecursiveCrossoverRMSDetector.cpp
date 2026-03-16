@@ -156,5 +156,22 @@ void RecursiveCrossoverRMSDetector<IOFloat>::process(span<IOFloat> samples)
     );
 }
 
+template<class IOFloat>
+void RecursiveCrossoverRMSDetector<IOFloat>::reset()
+{
+    std::visit(
+      overloaded{[](auto&& crossovers) {
+          for (auto& c : crossovers) {
+              c.highpass.reset();
+              c.lowpass.reset();
+          }
+      }},
+      crossovers_variant
+    );
+    for (auto& e : envelope_filters) {
+        e.reset();
+    }
+}
+
 template class RecursiveCrossoverRMSDetector<float>;
 template class RecursiveCrossoverRMSDetector<double>;

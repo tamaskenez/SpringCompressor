@@ -13,7 +13,7 @@ struct Bufs {
     vector<double> total_power;
 
     void reserve(size_t N);
-    size_t capacity() const;
+    [[nodiscard]] size_t capacity() const;
 };
 
 } // namespace RecursiveCrossoverRMSDetectorDetail
@@ -53,6 +53,7 @@ public:
 
     RecursiveCrossoverRMSDetector(const Pars& pars, size_t max_block_size);
     void process(span<IOFloat> samples);
+    void reset(); // Reset internal state to just after construction.
 
 private:
     template<class FilterImplementation>

@@ -28,6 +28,7 @@ public:
     {
         set_critically_damped_with_cutoff_freq(freq_hz, freq_hz);
     }
+    void reset(); // Reset internal state to after construction.
 
 private:
     double sample_rate;

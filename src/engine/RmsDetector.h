@@ -23,6 +23,8 @@ public:
 
     [[nodiscard]] float get_rms() const; // Return the latest one.
 
+    void reset(); // Reset internal state to after construction.
+
 private:
     double mean_square = 0.0;
     variant<double, Biquad_TDF2> filter = 0.0;
