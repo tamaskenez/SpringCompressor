@@ -2,6 +2,7 @@
 
 #include "JuceTimer.h"
 #include "engine.h"
+#include "generate_scope_data.h"
 #include "meadow/evariant.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -117,6 +118,9 @@ private:
     size_t test_signal_playhead = 0;
 
     JuceTimer ui_refresh_timer;
+
+    ScopeDataGeneratorThread scope_data_generator_thread;
+    int64_t last_scoped_data_drawn_request_id = -1;
 
     void parameterChanged(const juce::String&, float) override;
     void on_ui_refresh_timer_elapsed();

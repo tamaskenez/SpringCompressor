@@ -8,6 +8,7 @@ target_include_directories(SpringCompressorEngine PUBLIC ${CMAKE_CURRENT_SOURCE_
 target_link_libraries(SpringCompressorEngine
     PRIVATE
         meadow::meadow
+        readerwriterqueue::readerwriterqueue
 )
 
 target_precompile_headers(SpringCompressorEngine PRIVATE pch.h)

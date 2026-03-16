@@ -149,6 +149,11 @@ void SpringCompressorEditor::draw_scope_grid(
     scope.draw_grid(min_x, max_x, min_y, max_y, x_step, y_step);
 }
 
+void SpringCompressorEditor::add_plot_to_scope(span<AF2> plot, const juce::Colour& color)
+{
+    scope.add_plot(plot, color);
+}
+
 void SpringCompressorEditor::set_transfer_curve(const TransferCurveState& tcur)
 {
     transfer_curve_component.set_transfer_curve(tcur);

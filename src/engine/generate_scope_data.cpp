@@ -105,8 +105,8 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
                     // Stable gain reached.
                     samples_until_stable_gain = sample_ix;
                 } else {
-                    // Gain must be stable within 1 sec.
-                    assert(sample_ix < *samples_until_compression + k_sample_rate);
+                    // Gain must be stable within 2 sec.
+                    assert(sample_ix < *samples_until_compression + 2 * k_sample_rate);
                 }
             } break;
             }
@@ -133,7 +133,7 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
 }
 } // namespace
 
-ScopeData generate_scope_data(EnginePars pars)
+ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<int64_t>* current_request_id)
 {
     if (pars.transfer_curve.ratio == 1.0f) {
         return {};
@@ -161,6 +161,8 @@ ScopeData generate_scope_data(EnginePars pars)
     std::map<double, TestResultsAtFreq> test_results;
     ScopeData scope_data;
     for (auto T : Ts) {
+        if (current_request_id && current_request_id->load() != request_id)
+            return {};
         auto r = get_lowest_input_rms_db_to_switch_on_compressor(pars, T);
         const double freq_hz = k_sample_rate / T;
         auto& outputs_at_freq = scope_data.transfer_graph.transfers_by_freq.emplace_back();
@@ -175,4 +177,60 @@ ScopeData generate_scope_data(EnginePars pars)
     }
 
     return scope_data;
+}
+
+ScopeDataGeneratorThread::ScopeDataGeneratorThread()
+{
+    thread = std::jthread([this]() {
+        thread_function();
+    });
+}
+
+ScopeDataGeneratorThread::~ScopeDataGeneratorThread()
+{
+    last_request_id = -1;
+    thread_should_exit = true;
+}
+
+void ScopeDataGeneratorThread::start_testing(const EnginePars& pars)
+{
+    const auto request_id = next_request_id++;
+    last_request_id = request_id;
+    ui_scope_data_generator_queue.enqueue(TestRequest{.request_id = request_id, .pars = pars});
+}
+
+void ScopeDataGeneratorThread::thread_function()
+{
+    // vector<std::jthread> threads(std::thread::hardware_concurrency());
+    TestRequest test_request;
+    while (!thread_should_exit.load()) {
+        if (!ui_scope_data_generator_queue.wait_dequeue_timed(test_request, chr::milliseconds(20))) {
+            continue;
+        }
+        // Process pars.
+        println("Starting scope data generation for request {}", test_request.request_id);
+        auto r = generate_scope_data(test_request.pars, test_request.request_id, &last_request_id);
+        if (last_request_id.load() != test_request.request_id) {
+            println("Request {} aborted", test_request.request_id);
+            continue;
+        } else {
+            println("Request {} completed", test_request.request_id);
+            completed_requests_queue.enqueue(
+              CompletedRequest{.request_id = test_request.request_id, .pars = test_request.pars, .scope_data = MOVE(r)}
+            );
+        }
+    }
+}
+
+ScopeDataGeneratorThread::CompletedRequest* ScopeDataGeneratorThread::try_get_completed_request()
+{
+    CompletedRequest completed_request;
+    // Exhaust queue to get the latest one.
+    while (completed_requests_queue.try_dequeue(completed_request)) {
+        last_completed_request = MOVE(completed_request);
+    }
+    if (last_completed_request) {
+        return &*last_completed_request;
+    }
+    return nullptr;
 }

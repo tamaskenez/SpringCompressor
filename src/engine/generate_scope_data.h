@@ -2,6 +2,8 @@
 
 #include "engine.h"
 
+#include <readerwriterqueue/readerwriterqueue.h>
+
 struct ScopeData {
     // Input-output dB steady signals of different frequencies.
     struct TransferGraph {
@@ -37,4 +39,38 @@ struct ScopeData {
     };
 };
 
-ScopeData generate_scope_data(EnginePars pars);
+ScopeData
+generate_scope_data(EnginePars pars, int64_t request_id = 0, std::atomic<int64_t>* current_request_id = nullptr);
+
+class ScopeDataGeneratorThread
+{
+public:
+    struct CompletedRequest {
+        int64_t request_id;
+        EnginePars pars;
+        ScopeData scope_data;
+    };
+
+    ScopeDataGeneratorThread();
+    ~ScopeDataGeneratorThread();
+
+    void start_testing(const EnginePars& pars);
+    CompletedRequest* try_get_completed_request();
+
+private:
+    struct TestRequest {
+        int64_t request_id;
+        EnginePars pars;
+    };
+    moodycamel::BlockingReaderWriterQueue<TestRequest> ui_scope_data_generator_queue;
+    moodycamel::ReaderWriterQueue<CompletedRequest> completed_requests_queue;
+    std::atomic<bool> scope_data_generator_thread_running = false;
+    std::jthread thread;
+    optional<ScopeData> scope_data;
+    std::atomic<bool> thread_should_exit = false;
+    std::atomic<int64_t> last_request_id = 0;
+    int64_t next_request_id = 1;
+    optional<CompletedRequest> last_completed_request;
+
+    void thread_function();
+};

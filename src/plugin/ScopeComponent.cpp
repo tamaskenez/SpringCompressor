@@ -87,6 +87,50 @@ void ScopeComponent::draw_grid(
     repaint();
 }
 
+void ScopeComponent::add_plot(span<const AF2> plot, const juce::Colour& color)
+{
+    if (plot.size() < 2)
+        return;
+
+    const int w = image.getWidth();
+    const int h = image.getHeight();
+    if (w == 0 || h == 0)
+        return;
+
+    const int plot_w = w - k_margin_left;
+    const int plot_h = h - k_margin_bottom;
+
+    auto x_to_px = [&](float x) {
+        return k_margin_left + iround<int>((x - min_x) / (max_x - min_x) * ifcast<float>(plot_w - 1));
+    };
+    auto y_to_py = [&](float y) {
+        return iround<int>((1.0f - (y - min_y) / (max_y - min_y)) * ifcast<float>(plot_h - 1));
+    };
+
+    juce::Graphics g(image);
+    g.setColour(color);
+
+    juce::Path path;
+    bool started = false;
+    for (const auto& pt : plot) {
+        const int px = x_to_px(pt[0]);
+        const int py = y_to_py(pt[1]);
+        if (px < k_margin_left || px >= w || py < 0 || py >= plot_h) {
+            started = false;
+            continue;
+        }
+        if (!started) {
+            path.startNewSubPath(ifcast<float>(px), ifcast<float>(py));
+            started = true;
+        } else {
+            path.lineTo(ifcast<float>(px), ifcast<float>(py));
+        }
+    }
+    g.strokePath(path, juce::PathStrokeType(1.5f));
+
+    repaint();
+}
+
 void ScopeComponent::paint(juce::Graphics& g)
 {
     g.drawImageAt(image, 0, 0);

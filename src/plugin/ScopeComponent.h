@@ -2,6 +2,9 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <meadow/array.h>
+#include <meadow/cppext.h>
+
 // A component that renders into an internal juce::Image.
 // Call draw_grid() to set the coordinate system and paint a black background
 // with gray grid lines; the coordinate bounds are then available for use by
@@ -14,6 +17,10 @@ public:
     static constexpr int k_margin_bottom = 14;
 
     void draw_grid(float min_x, float max_x, float min_y, float max_y, float x_step, float y_step);
+
+    // Draw a polyline through the given (x, y) points in logical coordinates onto the image.
+    // Points outside the plot area are clipped. Calls repaint().
+    void add_plot(span<const AF2> plot, const juce::Colour& color);
 
     void paint(juce::Graphics& g) override;
     void resized() override;

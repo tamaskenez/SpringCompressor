@@ -287,7 +287,7 @@ void SpringCompressorProcessor::parameterChanged(UNUSED const juce::String& name
         sync_engine_processor(false);
     }
 
-    UNUSED auto scope_data = generate_scope_data(query_raw_parameter_values_into_EnginePars());
+    scope_data_generator_thread.start_testing(query_raw_parameter_values_into_EnginePars());
 }
 
 void SpringCompressorProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -435,6 +435,24 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
         // We're calling sync here to make sure we don't miss anything because the audio thread is stopped after a
         // parameterChanged call but before it could call sync_engine_processor.
         sync_engine_processor(false);
+    }
+
+    auto completed_request = scope_data_generator_thread.try_get_completed_request();
+    if (completed_request && completed_request->request_id != last_scoped_data_drawn_request_id) {
+        println("Received request {}", completed_request->request_id);
+        last_scoped_data_drawn_request_id = completed_request->request_id;
+        if (auto* editor = this->getActiveEditor()) {
+            UNUSED auto* e = dynamic_cast<SpringCompressorEditor*>(editor);
+
+            auto& sd = completed_request->scope_data;
+            auto& tg = sd.transfer_graph;
+            {
+                assert(!tg.transfers_by_freq.empty());
+                auto& g = tg.transfers_by_freq[0];
+                e->draw_scope_grid(-60, 0, -60, 0, 10, 10);
+                e->add_plot_to_scope(g.input_output_db, juce::Colours::white);
+            }
+        }
     }
 }
 
