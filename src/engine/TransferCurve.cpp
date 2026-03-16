@@ -29,7 +29,7 @@ TransferCurve::TransferCurve()
 TransferCurveState TransferCurve::set(const TransferCurvePars& p)
 {
     pars = p;
-    bool sanitize_changed = pars.sanitize();
+    UNUSED bool sanitize_changed = pars.sanitize();
     assert(!sanitize_changed);
     if (pars.ratio == 1) {
         pars.knee_width_db = 0;

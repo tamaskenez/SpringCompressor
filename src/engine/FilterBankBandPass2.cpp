@@ -12,7 +12,7 @@ FilterBankBandPass2::FilterBankBandPass2(double freq_lo_arg, double freq_hi, dou
     , filters_per_octave(filters_per_octave_arg)
 {
     const auto beta = (1 + sqrt(1 + 4 * square(Q))) / (2 * Q);
-    const auto max_fc = std::min(1 / beta, freq_hi);
+    UNUSED const auto max_fc = std::min(1 / beta, freq_hi);
     assert(freq_lo <= max_fc);
     const auto num_filters = ifloor<size_t>(filters_per_octave * log2(freq_hi / freq_lo)) + 1;
     filters.reserve(num_filters);

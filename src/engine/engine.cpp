@@ -141,7 +141,7 @@ struct EngineImpl : public Engine {
         sidechain_buf = vector<double>();
     }
 
-    void debug_verify_samples(span<const double> samples) const
+    void debug_verify_samples(UNUSED span<const double> samples) const
     {
 #ifndef NDEBUG
         if (debug_mode) {
@@ -152,7 +152,7 @@ struct EngineImpl : public Engine {
 #endif
     }
 
-    void debug_verify_decibels(span<const double> samples) const
+    void debug_verify_decibels(UNUSED span<const double> samples) const
     {
 #ifndef NDEBUG
         if (debug_mode) {
