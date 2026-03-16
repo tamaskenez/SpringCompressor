@@ -184,8 +184,14 @@ struct EngineImpl : public Engine {
             break;
         case EnginePars::InputLevelMethod::lpf:
             input_level_lpf.process(sidechain_buf);
-            for (auto& s : sidechain_buf) {
-                s = transfer_curve.gain_db_for_input_db(matlab::pow2db(s));
+            if (pars.input_level_lpf.rms) {
+                for (auto& s : sidechain_buf) {
+                    s = transfer_curve.gain_db_for_input_db(matlab::pow2db(s));
+                }
+            } else {
+                for (auto& s : sidechain_buf) {
+                    s = transfer_curve.gain_db_for_input_db(matlab::mag2db(s));
+                }
             }
             break;
         case EnginePars::InputLevelMethod::multiband:
