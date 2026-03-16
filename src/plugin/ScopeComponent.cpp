@@ -126,7 +126,7 @@ void ScopeComponent::add_plot(span<const AF2> plot, const juce::Colour& color)
             path.lineTo(ifcast<float>(px), ifcast<float>(py));
         }
     }
-    g.strokePath(path, juce::PathStrokeType(1.5f));
+    g.strokePath(path, juce::PathStrokeType(2.0f));
 
     repaint();
 }

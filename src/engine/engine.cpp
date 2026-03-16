@@ -163,7 +163,7 @@ struct EngineImpl : public Engine {
 #endif
     }
 
-    void debug_verify_gain_values(span<const double> samples) const
+    void debug_verify_gain_values(UNUSED span<const double> samples) const
     {
 #ifndef NDEBUG
         if (debug_mode) {

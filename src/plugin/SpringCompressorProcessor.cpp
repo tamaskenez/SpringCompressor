@@ -494,6 +494,14 @@ void SpringCompressorProcessor::redraw_scope()
                 );
                 auto& g = tg.transfers_by_freq[freq_ix];
                 e->draw_scope_grid(-60, 0, -60, 0, 10, 10);
+                constexpr float lowest_db = -60.0f;
+                if (lowest_db < g.input_output_db[0][0]) {
+                    vector<AF2> vs = {
+                      {lowest_db, lowest_db},
+                      g.input_output_db[0]
+                    };
+                    e->add_plot_to_scope(vs, juce::Colours::grey);
+                }
                 e->add_plot_to_scope(g.input_output_db, juce::Colours::white);
             }
         }
