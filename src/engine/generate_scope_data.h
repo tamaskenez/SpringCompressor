@@ -16,16 +16,15 @@ struct ScopeData {
 
     // Attack and release (step-up, step-down) for different levels.
     struct StepGraph {
-        struct SignalAtLevel {
-            float level_db;       // Above threshold.
-            vector<float> signal; // Linear value.
-        };
-        vector<float> time_ms;
-        vector<SignalAtLevel> signals;
+        float step_db; // Starting at threshold, we apply a step up, then down.
+        // Extra output RMS above output at threshold.
+        // First coordinate is milliseconds.
+        vector<AF2> attack_out_db_by_ms;
+        vector<AF2> release_out_db_by_ms;
     };
     struct StepGraphsAtFreq {
         float freq_hz;
-        StepGraph attacks, releases;
+        vector<StepGraph> step_graphs;
     };
     vector<StepGraphsAtFreq> step_graphs_by_freq;
 

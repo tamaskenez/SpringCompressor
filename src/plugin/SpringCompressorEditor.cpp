@@ -181,7 +181,7 @@ void SpringCompressorEditor::draw_scope_grid(
     scope.draw_grid(min_x, max_x, min_y, max_y, x_step, y_step);
 }
 
-void SpringCompressorEditor::add_plot_to_scope(span<AF2> plot, const juce::Colour& color)
+void SpringCompressorEditor::add_plot_to_scope(span<const AF2> plot, const juce::Colour& color)
 {
     scope.add_plot(plot, color);
 }

@@ -467,7 +467,6 @@ void SpringCompressorProcessor::redraw_scope()
     auto* e = dynamic_cast<SpringCompressorEditor*>(editor);
     auto completed_request = scope_data_generator_thread.try_get_completed_request();
     if (!completed_request) {
-        assert(false);
         return;
     }
 
@@ -507,7 +506,28 @@ void SpringCompressorProcessor::redraw_scope()
         }
         break;
     case 1: // attack
-        break;
+    {
+        const auto& sg = sd.step_graphs_by_freq;
+        if (!sg.empty()) {
+            {
+                vector<float> sfv;
+                sfv.reserve(sg.size());
+                for (auto& x : sg) {
+                    sfv.push_back(x.freq_hz);
+                }
+                e->set_scope_freq_values(sfv);
+            }
+            const auto freq_percent = raw_parameter_values.scope_freq->load();
+            const auto freq_ix = std::min(ifloor<size_t>(freq_percent * ifcast<float>(sg.size())), sg.size() - 1);
+            auto& t = sg[freq_ix];
+            const float max_ms = 50;
+            const float ms_step = 10;
+            e->draw_scope_grid(0, max_ms, 0, t.step_graphs.back().step_db, ms_step, 10);
+            for (auto& s : t.step_graphs) {
+                e->add_plot_to_scope(s.attack_out_db_by_ms, juce::Colours::white);
+            }
+        }
+    } break;
     case 2: // release
         break;
     case 3: // hdist

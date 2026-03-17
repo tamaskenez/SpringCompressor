@@ -15,6 +15,8 @@ constexpr double k_highest_test_freq = 12000;
 constexpr double k_sample_rate = 48000;
 constexpr double k_stable_gain_max_db_per_sec = 0.1;
 constexpr int k_num_periods_to_wait_until_announced_stable = 12;
+constexpr double k_safety_margin_db = 0.1;
+const auto k_3_db = matlab::pow2db<double>(2);
 
 double sum_of_squares(const vector<float>& xs)
 {
@@ -23,6 +25,29 @@ double sum_of_squares(const vector<float>& xs)
         s += square(x);
     }
     return s;
+}
+
+// Generate `num_periods` periods of a cosine wave, `length` samples in total.
+// The length of one period in samples will be `length / num_periods`.
+vector<float> make_test_signal(int num_periods, int length, double A)
+{
+    assert(num_periods * 2 <= length);
+    vector<float> xs;
+    xs.reserve(sucast(length));
+    const double T = ifcast<double>(length) / num_periods;
+    const double omega = 2 * num::pi / T;
+    for (int i = 0; i < length; ++i) {
+        xs.push_back(ffcast<float>(cos(omega * i) * A));
+    }
+    return xs;
+}
+
+auto new_engine_ready_to_process (const EnginePars& pars, int T) {
+    auto engine = make_engine();
+    engine->set_debug_mode(true);
+    auto _ = engine->set_pars(pars);
+    engine->prepare_to_play(k_sample_rate, T, 1);
+    return engine;
 }
 
 struct StableGainTestResult {
@@ -34,10 +59,8 @@ struct StableGainTestResult {
 // the gain stabilized.
 vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(const EnginePars& pars, int T)
 {
-    const auto engine = make_engine();
-    engine->set_debug_mode(true);
-    auto _ = engine->set_pars(pars);
-    engine->prepare_to_play(k_sample_rate, T, 1);
+    auto engine = new_engine_ready_to_process(pars,T);
+
     optional<int> prev_samples_until_compression;
     // If the compressor measures RMS we need a sine with
     //     threshold_db RMS = threshold_db+3 amplitude
@@ -45,23 +68,17 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
     // If it measures amplitude, we need
     //     threshold_db-3 RMS = threshold_db amplitude
     // We pick the smaller one.
-    const auto k_3_db = matlab::pow2db<double>(2);
     const auto min_amp_db = ifloor<int>(pars.transfer_curve.threshold_db);
     vector<StableGainTestResult> results;
     for (int amp_db = 0; amp_db >= min_amp_db; amp_db -= k_dbs_per_test_level) {
         // Generate one period of input signal.
-        vector<float> input_signal_one_period;
-        input_signal_one_period.reserve(sucast(T));
         // Subtracting 0.1 dB to leave room for numeric errors and still have all samples -1 .. 1
-        const auto A = matlab::db2mag<double>(amp_db - k_3_db - 0.1);
-        for (int i = 0; i < T; ++i) {
-            input_signal_one_period.push_back(ffcast<float>(cos(2 * num::pi * i / T) * A));
-        }
+        const auto input_signal_A = matlab::db2mag<double>(amp_db - k_safety_margin_db);
+        const auto input_signal_one_period = make_test_signal(1, T, input_signal_A);
 
         // Prepare calling engine process.
         vector<float> buf(sucast(T));
         vector<Engine::Trace> trace;
-        float* const channel = buf.data();
         enum class Phase {
             waiting_for_compression,
             waiting_for_stable_gain
@@ -70,12 +87,12 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
         optional<int> samples_until_gain_stopped_decreasing;
         double min_gain_so_far = 1.0;
         engine->reset();
-
         // Feed input signal into the engine and check output.
         // We need to wait for the compressor first to switch on (gain < 1) then for the gain to stabilize.
         for (int sample_ix = 0;; sample_ix += T) {
-            ra::copy(input_signal_one_period, buf.begin());
-            engine->process_block_with_trace(span(&channel, 1), iicast<int>(input_signal_one_period.size()), trace);
+            buf = input_signal_one_period;
+            float* const channel = buf.data();
+            engine->process_block_with_trace(span(&channel, 1), iicast<int>(buf.size()), trace);
 
             const auto min_gain = ra::min(trace, {}, &Engine::Trace::gain).gain;
             assert(
@@ -92,8 +109,8 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
                             exit_loop = true;
                         }
                     } else {
-                        // Wait at most 1 second.
-                        if (sample_ix > k_sample_rate) {
+                        // Wait at most 2 seconds.
+                        if (sample_ix > 2 * k_sample_rate) {
                             exit_loop = true;
                         }
                     }
@@ -106,25 +123,6 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
             case Phase::waiting_for_stable_gain: {
                 const auto change_db_per_sec = matlab::mag2db(min_gain / min_gain_so_far) / (T / k_sample_rate);
                 if (change_db_per_sec < -k_stable_gain_max_db_per_sec) {
-#if 0
-                    static FILE*f{};
-                    if(sample_ix > *samples_until_compression + k_sample_rate) {
-                        if(!f) {
-                            f=fopen("/tmp/debug_stable_gain.m","w");
-                            assert(f);
-                            println(f, "A = [");
-                        }
-                        for(unsigned i=0;i<sucast(T);++i) {
-                            println(f,"{} {} {}",input_signal_one_period[i], buf[i], trace[i].gain);
-                        }
-                    }
-                    if(sample_ix >= *samples_until_compression + 2 * k_sample_rate) {
-                        assert(f);
-                        println(f,"];");
-                        fclose(f);
-                        NOP;
-                    }
-#endif
 
                     samples_until_gain_stopped_decreasing = nullopt;
 
@@ -151,9 +149,10 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
             prev_samples_until_compression = *samples_until_compression;
             const auto output_energy = sum_of_squares(buf);
             const auto input_energy = sum_of_squares(input_signal_one_period);
+            const auto input_rms_db = matlab::pow2db(input_energy / T);
             results.push_back(
               StableGainTestResult{
-                .input_rms_db = matlab::pow2db(input_energy / T),
+                .input_rms_db = input_rms_db,
                 .samples_for_gain_to_stabilize = *samples_until_stable_gain,
                 .gain_db = matlab::pow2db(output_energy / input_energy)
               }
@@ -163,7 +162,76 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
         }
     }
     ra::reverse(results);
+
     return results;
+}
+
+struct TestAttackReleaseResult {
+    vector<AF2> attack_db_by_ms;
+    vector<AF2> release_db_by_ms;
+};
+TestAttackReleaseResult
+test_attack_and_release(const EnginePars& pars, int T, double step_db, const StableGainTestResult& lo_input)
+{
+    const auto engine = new_engine_ready_to_process(pars,T);
+
+    const double A_lo = matlab::db2mag(lo_input.input_rms_db + k_3_db);
+    const double A_hi = matlab::db2mag(lo_input.input_rms_db + k_3_db + step_db);
+    const auto ts_lo = make_test_signal(1, T, A_lo);
+    const auto ts_hi = make_test_signal(1, T, A_hi);
+
+    // Start at a sine at lo_input, wait until stable.
+    vector<Engine::Trace> trace;
+    vector<float> buf(sucast(T));
+    float* const channel = buf.data();
+    for (int sample_ix = 0; sample_ix < lo_input.samples_for_gain_to_stabilize; sample_ix += T) {
+        buf = ts_lo;
+        engine->process_block_with_trace(span(&channel, 1), iicast<int>(buf.size()), trace);
+    }
+
+    const auto out_db_when_lo = matlab::pow2db(sum_of_squares(buf));
+
+    // Raise input with step_db, wait until stable.
+    struct MinGainAtSampleIx {
+        double min_gain_db;
+        int sample_ix;
+    };
+    optional<MinGainAtSampleIx> assumed_stable_since;
+    bool stable = false;
+    const auto two_seconds_samples = iround<int>(k_sample_rate * 2);
+
+    vector<AF2> extra_out_db_by_ms;
+    for (int sample_ix = 0; !stable && sample_ix < two_seconds_samples; sample_ix += T) {
+        buf = ts_hi;
+        engine->process_block_with_trace(span(&channel, 1), iicast<int>(buf.size()), trace);
+        const auto min_gain_db = matlab::mag2db(ra::min(trace, {}, &Engine::Trace::gain).gain);
+        extra_out_db_by_ms.push_back(
+          AF2{
+            ffcast<float>(1000.0 * sample_ix / k_sample_rate),
+            ffcast<float>(matlab::pow2db(sum_of_squares(buf)) - out_db_when_lo)
+          }
+        );
+        if (assumed_stable_since) {
+            const auto dsamples = sample_ix - assumed_stable_since->sample_ix;
+            const auto change_db_per_sec =
+              (min_gain_db - assumed_stable_since->min_gain_db) / (dsamples / k_sample_rate);
+            if (abs(change_db_per_sec) <= k_stable_gain_max_db_per_sec) {
+                if (dsamples > T * k_num_periods_to_wait_until_announced_stable) {
+                    stable = true;
+                }
+            } else {
+                assumed_stable_since = nullopt;
+            }
+        }
+        if (!assumed_stable_since) {
+            assumed_stable_since = MinGainAtSampleIx{.min_gain_db = min_gain_db, .sample_ix = sample_ix};
+        }
+    }
+    assert(stable);
+
+    // Drop to lo_input, wait until stable.
+
+    return TestAttackReleaseResult{.attack_db_by_ms = MOVE(extra_out_db_by_ms), .release_db_by_ms = vector<AF2>()};
 }
 } // namespace
 
@@ -176,6 +244,7 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
     pars.transfer_curve.makeup_gain_db = 0;
     pars.transfer_curve.reference_level_db = -INFINITY;
 
+    // Create test frequencies.
     const int highest_freq_T = std::max(2, iceil<int>(k_sample_rate / k_highest_test_freq));
     vector<int> Ts = {highest_freq_T};
     const double freq_beta = semitones2ratio(k_semitones_per_test_freq);
@@ -189,14 +258,55 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
     }
     ra::reverse(Ts);
 
+    // Test RMS transfer characteristics with steady signals.
     struct TestResultsAtFreq {
         vector<StableGainTestResult> stable_gain_at_input_levels;
     };
-    std::map<double, TestResultsAtFreq> test_results;
+    std::map<int, TestResultsAtFreq> test_results;
     ScopeData scope_data;
     for (auto T : Ts) {
         if (current_request_id && current_request_id->load() != request_id)
             return {};
+        // Test with signal with period T.
+        auto r = get_lowest_input_rms_db_to_switch_on_compressor(pars, T);
+        // Put the result in scope_data and test_results.
+        const double freq_hz = k_sample_rate / T;
+        auto& outputs_at_freq = scope_data.transfer_graph.transfers_by_freq.emplace_back();
+        outputs_at_freq.freq_hz = ffcast<float>(freq_hz);
+        outputs_at_freq.input_output_db.reserve(r.size());
+        for (auto x : r) {
+            outputs_at_freq.input_output_db.push_back(
+              AF2{ffcast<float>(x.input_rms_db), ffcast<float>(x.input_rms_db + x.gain_db)}
+            );
+        }
+        test_results[T].stable_gain_at_input_levels = MOVE(r);
+    }
+
+    // Test attack and release.
+    vector<double> step_dbs = {6, 12, 18, 24};
+    for (auto T : Ts) {
+        auto& step_graph_at_freq = scope_data.step_graphs_by_freq.emplace_back(
+          ScopeData::StepGraphsAtFreq{.freq_hz = ffcast<float>(k_sample_rate / T)}
+        );
+        if (current_request_id && current_request_id->load() != request_id) {
+            return {};
+        }
+        auto& tr = test_results.at(T);
+
+        for (auto step_db : step_dbs) {
+            if (tr.stable_gain_at_input_levels[0].input_rms_db + step_db + k_safety_margin_db > -k_3_db) {
+                break;
+            }
+            auto r = test_attack_and_release(pars, T, step_db, tr.stable_gain_at_input_levels[0]);
+            step_graph_at_freq.step_graphs.emplace_back(
+              ScopeData::StepGraph{
+                .step_db = ffcast<float>(step_db),
+                .attack_out_db_by_ms = MOVE(r.attack_db_by_ms),
+                .release_out_db_by_ms = MOVE(r.release_db_by_ms)
+              }
+            );
+        }
+#if 0
         auto r = get_lowest_input_rms_db_to_switch_on_compressor(pars, T);
         const double freq_hz = k_sample_rate / T;
         auto& outputs_at_freq = scope_data.transfer_graph.transfers_by_freq.emplace_back();
@@ -208,6 +318,7 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
             );
         }
         test_results[freq_hz].stable_gain_at_input_levels = MOVE(r);
+#endif
     }
 
     return scope_data;
