@@ -42,7 +42,8 @@ vector<float> make_test_signal(int num_periods, int length, double A)
     return xs;
 }
 
-auto new_engine_ready_to_process (const EnginePars& pars, int T) {
+auto new_engine_ready_to_process(const EnginePars& pars, int T)
+{
     auto engine = make_engine();
     engine->set_debug_mode(true);
     auto _ = engine->set_pars(pars);
@@ -59,7 +60,7 @@ struct StableGainTestResult {
 // the gain stabilized.
 vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(const EnginePars& pars, int T)
 {
-    auto engine = new_engine_ready_to_process(pars,T);
+    auto engine = new_engine_ready_to_process(pars, T);
 
     optional<int> prev_samples_until_compression;
     // If the compressor measures RMS we need a sine with
@@ -123,7 +124,6 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
             case Phase::waiting_for_stable_gain: {
                 const auto change_db_per_sec = matlab::mag2db(min_gain / min_gain_so_far) / (T / k_sample_rate);
                 if (change_db_per_sec < -k_stable_gain_max_db_per_sec) {
-
                     samples_until_gain_stopped_decreasing = nullopt;
 
                     // Gain must be stable within 2 sec.
@@ -173,7 +173,7 @@ struct TestAttackReleaseResult {
 TestAttackReleaseResult
 test_attack_and_release(const EnginePars& pars, int T, double step_db, const StableGainTestResult& lo_input)
 {
-    const auto engine = new_engine_ready_to_process(pars,T);
+    const auto engine = new_engine_ready_to_process(pars, T);
 
     const double A_lo = matlab::db2mag(lo_input.input_rms_db + k_3_db);
     const double A_hi = matlab::db2mag(lo_input.input_rms_db + k_3_db + step_db);
@@ -200,12 +200,12 @@ test_attack_and_release(const EnginePars& pars, int T, double step_db, const Sta
     bool stable = false;
     const auto two_seconds_samples = iround<int>(k_sample_rate * 2);
 
-    vector<AF2> extra_out_db_by_ms;
+    vector<AF2> attack_db_by_ms, release_db_by_ms;
     for (int sample_ix = 0; !stable && sample_ix < two_seconds_samples; sample_ix += T) {
         buf = ts_hi;
         engine->process_block_with_trace(span(&channel, 1), iicast<int>(buf.size()), trace);
         const auto min_gain_db = matlab::mag2db(ra::min(trace, {}, &Engine::Trace::gain).gain);
-        extra_out_db_by_ms.push_back(
+        attack_db_by_ms.push_back(
           AF2{
             ffcast<float>(1000.0 * sample_ix / k_sample_rate),
             ffcast<float>(matlab::pow2db(sum_of_squares(buf)) - out_db_when_lo)
@@ -231,7 +231,39 @@ test_attack_and_release(const EnginePars& pars, int T, double step_db, const Sta
 
     // Drop to lo_input, wait until stable.
 
-    return TestAttackReleaseResult{.attack_db_by_ms = MOVE(extra_out_db_by_ms), .release_db_by_ms = vector<AF2>()};
+    stable = false;
+    assumed_stable_since = nullopt;
+    for (int sample_ix = 0; !stable && sample_ix < two_seconds_samples; sample_ix += T) {
+        buf = ts_lo;
+        engine->process_block_with_trace(span(&channel, 1), iicast<int>(buf.size()), trace);
+        const auto min_gain_db = matlab::mag2db(ra::min(trace, {}, &Engine::Trace::gain).gain);
+        release_db_by_ms.push_back(
+          AF2{
+            ffcast<float>(1000.0 * sample_ix / k_sample_rate),
+            ffcast<float>(matlab::pow2db(sum_of_squares(buf)) - out_db_when_lo)
+          }
+        );
+        if (assumed_stable_since) {
+            const auto dsamples = sample_ix - assumed_stable_since->sample_ix;
+            const auto change_db_per_sec =
+              (min_gain_db - assumed_stable_since->min_gain_db) / (dsamples / k_sample_rate);
+            if (abs(change_db_per_sec) <= k_stable_gain_max_db_per_sec) {
+                if (dsamples > T * k_num_periods_to_wait_until_announced_stable) {
+                    stable = true;
+                }
+            } else {
+                assumed_stable_since = nullopt;
+            }
+        }
+        if (!assumed_stable_since) {
+            assumed_stable_since = MinGainAtSampleIx{.min_gain_db = min_gain_db, .sample_ix = sample_ix};
+        }
+    }
+    assert(stable);
+
+    return TestAttackReleaseResult{
+      .attack_db_by_ms = MOVE(attack_db_by_ms), .release_db_by_ms = vector<AF2>(release_db_by_ms)
+    };
 }
 } // namespace
 

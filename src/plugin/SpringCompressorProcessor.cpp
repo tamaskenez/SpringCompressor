@@ -472,6 +472,34 @@ void SpringCompressorProcessor::redraw_scope()
 
     auto& sd = completed_request->scope_data;
 
+    const auto attack_release = [&sg = sd.step_graphs_by_freq, e, this](bool release) {
+        if (!sg.empty()) {
+            {
+                vector<float> sfv;
+                sfv.reserve(sg.size());
+                for (auto& x : sg) {
+                    sfv.push_back(x.freq_hz);
+                }
+                e->set_scope_freq_values(sfv);
+            }
+            const auto freq_percent = raw_parameter_values.scope_freq->load();
+            const auto freq_ix = std::min(ifloor<size_t>(freq_percent * ifcast<float>(sg.size())), sg.size() - 1);
+            auto& t = sg[freq_ix];
+            const float max_ms = 50;
+            const float ms_step = 10;
+            e->draw_scope_grid(
+              0,
+              max_ms,
+              release ? -t.step_graphs.back().step_db : 0,
+              release ? 0 : t.step_graphs.back().step_db,
+              ms_step,
+              10
+            );
+            for (auto& s : t.step_graphs) {
+                e->add_plot_to_scope(release ? s.release_out_db_by_ms : s.attack_out_db_by_ms, juce::Colours::white);
+            }
+        }
+    };
     switch (iround<int>(raw_parameter_values.scope_mode->load())) {
     case 0:
         // transfer
@@ -506,29 +534,10 @@ void SpringCompressorProcessor::redraw_scope()
         }
         break;
     case 1: // attack
-    {
-        const auto& sg = sd.step_graphs_by_freq;
-        if (!sg.empty()) {
-            {
-                vector<float> sfv;
-                sfv.reserve(sg.size());
-                for (auto& x : sg) {
-                    sfv.push_back(x.freq_hz);
-                }
-                e->set_scope_freq_values(sfv);
-            }
-            const auto freq_percent = raw_parameter_values.scope_freq->load();
-            const auto freq_ix = std::min(ifloor<size_t>(freq_percent * ifcast<float>(sg.size())), sg.size() - 1);
-            auto& t = sg[freq_ix];
-            const float max_ms = 50;
-            const float ms_step = 10;
-            e->draw_scope_grid(0, max_ms, 0, t.step_graphs.back().step_db, ms_step, 10);
-            for (auto& s : t.step_graphs) {
-                e->add_plot_to_scope(s.attack_out_db_by_ms, juce::Colours::white);
-            }
-        }
-    } break;
+        attack_release(false);
+        break;
     case 2: // release
+        attack_release(true);
         break;
     case 3: // hdist
         break;
