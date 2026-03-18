@@ -9,6 +9,8 @@ target_link_libraries(SpringCompressorEngine
     PUBLIC
         meadow::meadow
         readerwriterqueue::readerwriterqueue
+    PRIVATE
+        pocketfft::pocketfft
 )
 
 target_precompile_headers(SpringCompressorEngine PRIVATE pch.h)
