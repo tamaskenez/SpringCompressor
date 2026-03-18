@@ -45,7 +45,7 @@ AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span
     auto dft_bin_power = [&](int k) -> double {
         double re = 0, im = 0;
         for (int n = 0; n < N; ++n) {
-            const auto kn_mod_N = ifcast<double>((static_cast<int64_t>(k) * n) % N);
+            const auto kn_mod_N = ifcast<double>(k * n % N);
             const double angle = -two_pi_over_N * kn_mod_N;
             re += signal[sucast(n)] * cos(angle);
             im += signal[sucast(n)] * sin(angle);
