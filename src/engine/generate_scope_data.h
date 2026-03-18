@@ -29,13 +29,39 @@ struct ScopeData {
     vector<StepGraphsAtFreq> step_graphs_by_freq;
 
     // Harmonic distortion for steady signals of different frequencies and levels.
-    struct HarmonicDistortionGraph {
+    struct HarmonicDistortionMatrix {
         vector<float> freqs_hz;
-        vector<float> levels_db; // Above threshold.
+        vector<float> levels_db;
         vector<float> harmonic_distortion_data, inharmonic_distortion_data;
-        std::mdspan<float, std::dextents<int, 2>> harmonic_distortion_db_by_freq_and_level,
-          inharmonic_distortion_db_by_freq_and_level;
-    };
+
+        void init(size_t num_freqs, size_t num_levels)
+        {
+            freqs_hz.resize(num_freqs);
+            levels_db.resize(num_levels);
+            harmonic_distortion_data.resize(num_freqs * num_levels);
+            inharmonic_distortion_data.resize(num_freqs * num_levels);
+        }
+        [[nodiscard]] std::mdspan<float, std::dextents<int, 2>> harmonic_distortion_db_by_freq_and_level()
+        {
+            assert(harmonic_distortion_data.size() == freqs_hz.size() * levels_db.size());
+            return {harmonic_distortion_data.data(), std::dextents<int, 2>(freqs_hz.size(), levels_db.size())};
+        }
+        [[nodiscard]] std::mdspan<float, std::dextents<int, 2>> inharmonic_distortion_db_by_freq_and_level()
+        {
+            assert(inharmonic_distortion_data.size() == freqs_hz.size() * levels_db.size());
+            return {inharmonic_distortion_data.data(), std::dextents<int, 2>(freqs_hz.size(), levels_db.size())};
+        }
+        [[nodiscard]] std::mdspan<const float, std::dextents<int, 2>> harmonic_distortion_db_by_freq_and_level() const
+        {
+            assert(harmonic_distortion_data.size() == freqs_hz.size() * levels_db.size());
+            return {harmonic_distortion_data.data(), std::dextents<int, 2>(freqs_hz.size(), levels_db.size())};
+        }
+        [[nodiscard]] std::mdspan<const float, std::dextents<int, 2>> inharmonic_distortion_db_by_freq_and_level() const
+        {
+            assert(inharmonic_distortion_data.size() == freqs_hz.size() * levels_db.size());
+            return {inharmonic_distortion_data.data(), std::dextents<int, 2>(freqs_hz.size(), levels_db.size())};
+        }
+    } harmonic_distortion_matrix;
 };
 
 ScopeData

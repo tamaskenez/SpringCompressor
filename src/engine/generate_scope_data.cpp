@@ -267,26 +267,31 @@ test_attack_and_release(const EnginePars& pars, int T, double step_db, const Sta
     };
 }
 
-void test_harmonics(const EnginePars& pars, int T, double db, const StableGainTestResult& stable)
+pair<double, AnalysePeriodicSignalHarmonicsResult>
+test_harmonics(const EnginePars& pars, int T, double db, const StableGainTestResult& stable)
 {
     // Instead of T, use T+0.5 to push all inharmonic distortion (because of above Nyquist harmonics) into k+0.5
     // harmonics.
-    int TT = 2 * T + 1;
-    const auto engine = new_engine_ready_to_process(pars, TT);
-    const auto test_signal_2_periods = make_test_signal(2, TT, matlab::db2mag(db + k_3_db));
+    // Use coherent sampling.
+    const int num_periods = 2;
+    const int signal_length = 2 * T + 1;
+
+    const auto engine = new_engine_ready_to_process(pars, signal_length);
+    const auto test_signal_2_periods = make_test_signal(2, signal_length, matlab::db2mag(db + k_3_db));
     vector<float> buf;
-    for (int sample_ix = 0; sample_ix < stable.samples_for_gain_to_stabilize; sample_ix += TT) {
+    for (int sample_ix = 0; sample_ix < stable.samples_for_gain_to_stabilize; sample_ix += signal_length) {
         buf = test_signal_2_periods;
         float* const channel = buf.data();
-        engine->process_block(span(&channel, 1), TT);
+        engine->process_block(span(&channel, 1), signal_length);
     }
     {
         buf = test_signal_2_periods;
         float* const channel = buf.data();
-        engine->process_block(span(&channel, 1), TT);
+        engine->process_block(span(&channel, 1), signal_length);
         vector<double> dbuf(buf.size());
         ra::copy(buf, dbuf.begin());
-        UNUSED auto r = analyse_periodic_signal_harmonics(dbuf, 2);
+        const auto actual_T = ifcast<double>(signal_length) / num_periods;
+        return pair(k_sample_rate / actual_T, analyse_periodic_signal_harmonics(dbuf, 2));
     }
 }
 } // namespace
@@ -365,20 +370,31 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
     }
 
     // Test harmonics
-    const vector<double> harmonic_dbs = {-4, -10, -16, -22};
-    for (auto T : Ts) {
+    const vector<double> harmonic_dbs = {-22, -16, -10, -4};
+    auto& hmd = scope_data.harmonic_distortion_matrix;
+    hmd.init(Ts.size(), harmonic_dbs.size());
+    ra::copy(harmonic_dbs, hmd.levels_db.begin());
+    for (unsigned T_ix = 0; T_ix < Ts.size(); T_ix++) {
+        const auto T = Ts[T_ix];
         auto& tr = test_results.at(T);
-
-        for (auto db : harmonic_dbs) {
+        for (unsigned db_ix = 0; db_ix < harmonic_dbs.size(); db_ix++) {
+            const auto db = harmonic_dbs[db_ix];
             auto& sg = tr.stable_gain_at_input_levels;
             auto me = ra::min_element(sg, {}, [db](const StableGainTestResult& a) {
                 return abs(a.input_rms_db - db);
             });
             assert(me != sg.end());
-            test_harmonics(pars, T, db, *me);
+            auto [freq_hz, result] = test_harmonics(pars, T, db, *me);
+            if (db_ix == 0) {
+                // freq_hz is expected to be independent of db
+                hmd.freqs_hz[T_ix] = ffcast<float>(freq_hz);
+            } else {
+                assert(abs(hmd.freqs_hz[T_ix] - ffcast<float>(freq_hz)) < 1e-6);
+            }
+            hmd.harmonic_distortion_db_by_freq_and_level()[T_ix, db_ix] = ffcast<float>(result.thd_db());
+            hmd.inharmonic_distortion_db_by_freq_and_level()[T_ix, db_ix] = ffcast<float>(result.tid_db());
         }
     }
-
     return scope_data;
 }
 
