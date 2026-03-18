@@ -102,7 +102,7 @@ TEST(engine_util_test, time_constant_samples_to_cutoff_hps)
 
 TEST(engine_util_test, analyse_periodic_signal_harmonics)
 {
-    constexpr double k_silence_db = -135.0;
+    constexpr double k_silence_db = -250.0;
     constexpr double eps = 1e-12;
 
     for (size_t M : {8u, 9u, 97u, 98u}) {
@@ -182,6 +182,9 @@ TEST(engine_util_test, analyse_periodic_signal_levels_of_distortion)
         x[i] = cos(k * 2 * num::pi * i / M);
     }
     UNUSED const auto r = analyse_periodic_signal_harmonics(x, k);
-    EXPECT_LT(r.rest_db, -280);
+    EXPECT_LT(r.dc_db, -310);
+    EXPECT_NEAR(r.f0_db, matlab::pow2db(0.5), 1e-12);
+    EXPECT_LT(r.harmonics_db, -300);
+    EXPECT_LT(r.rest_db, -290);
     NOP;
 }
