@@ -22,7 +22,7 @@ x=cos(2*pi*ns/T);
 
 % Distortion
 if 1
-    Q = 0;
+    Q = 1;
     if Q > 0
         xd = tanh(x*Q)/Q;
     end

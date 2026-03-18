@@ -1,4 +1,5 @@
 #pragma once
+#include "meadow/matlab.h"
 #include "meadow/matlab_signal.h"
 
 #include <numbers>
@@ -68,6 +69,20 @@ struct AnalysePeriodicSignalHarmonicsResult {
     double f0_db;        // The power of the fundamental, in dBFS.
     double harmonics_db; // The power of the harmonics (up to Nyquist), excluding the fundamental, in dBFS.
     double rest_db;      // The remaining power of the signal which contains aliasing distortion and noise.
+
+    // Total harmonic distortion:
+    // Ratio of sums of energies of harmonics(above F0) to energy of F0.
+    [[nodiscard]] double thd_db() const
+    {
+        return harmonics_db - f0_db;
+    }
+
+    // Total inharmonic distortion.
+    // Ratio of non-dc, non-F0 energies (which includes inharmonic distortion and noise) to energy of F0.
+    [[nodiscard]] double tid_db() const
+    {
+        return rest_db - f0_db;
+    }
 };
 // The span `signal` contains `num_periods` of a periodic signal.
 // That is, `T = double(signal.size()) / num_periods`, in samples.

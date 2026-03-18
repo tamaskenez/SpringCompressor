@@ -173,18 +173,40 @@ TEST(engine_util_test, analyse_periodic_signal_harmonics)
     }
 }
 
-TEST(engine_util_test, analyse_periodic_signal_levels_of_distortion)
+TEST(engine_util_test, analyse_periodic_signal_levels_of_distortion_pure)
 {
-    size_t M = 97;
-    int k = 13;
+    constexpr double eps = 1e-10;
+    UNUSED constexpr double eps2 = 1e-8;
+    constexpr size_t M = 97;
+    constexpr int k = 13;
     vector<double> x(M);
-    for (unsigned i = 0; i < M; ++i) {
-        x[i] = cos(k * 2 * num::pi * i / M);
+    for (double Q : {0.0, 0.1, 1.0}) {
+        for (unsigned i = 0; i < M; ++i) {
+            x[i] = cos(k * 2 * num::pi * i / M);
+            if (Q != 0) {
+                x[i] = tanh(Q * x[i]) / Q;
+            }
+        }
+        const auto r = analyse_periodic_signal_harmonics(x, k);
+        EXPECT_LT(r.dc_db, -310);
+        if (Q == 0) {
+            EXPECT_NEAR(r.f0_db, matlab::pow2db(0.5), eps);
+            EXPECT_LT(r.harmonics_db, -300);
+            EXPECT_LT(r.rest_db, -290);
+        } else if (abs(Q - 0.1) < eps) {
+            EXPECT_NEAR(r.f0_db, -3.031969562004917, eps);
+            EXPECT_NEAR(r.harmonics_db, -64.63727851077439, eps);
+            EXPECT_NEAR(r.rest_db, -124.6553430996536, eps2);
+            EXPECT_NEAR(r.thd_db(), -61.60530894876948, eps);
+            EXPECT_NEAR(r.tid_db(), -121.6233735376487, eps2);
+        } else if (Q == 1) {
+            EXPECT_NEAR(r.f0_db, -4.822649231245157, eps);
+            EXPECT_NEAR(r.harmonics_db, -28.32297593478123, eps);
+            EXPECT_NEAR(r.rest_db, -49.88239155645496, eps);
+            EXPECT_NEAR(r.thd_db(), -23.50032670353608, eps);
+            EXPECT_NEAR(r.tid_db(), -45.05974232520981, eps);
+        } else {
+            assert(false);
+        }
     }
-    UNUSED const auto r = analyse_periodic_signal_harmonics(x, k);
-    EXPECT_LT(r.dc_db, -310);
-    EXPECT_NEAR(r.f0_db, matlab::pow2db(0.5), 1e-12);
-    EXPECT_LT(r.harmonics_db, -300);
-    EXPECT_LT(r.rest_db, -290);
-    NOP;
 }

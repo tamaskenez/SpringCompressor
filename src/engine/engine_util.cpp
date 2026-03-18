@@ -36,8 +36,9 @@ matlab::TransferFunctionCoeffs exponential_moving_average_filter(double freq_hps
 
 AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span<const double> signal, int num_periods)
 {
+    assert(!signal.empty());
     const int N = iicast<int>(signal.size());
-    assert(N > 0 && num_periods > 0 && num_periods < N);
+    assert(0 < num_periods && 2 * num_periods <= N);
     const double N_d = ifcast<double>(N);
 
     // Compute the real-to-complex FFT: output has N/2+1 bins (0..N/2).
