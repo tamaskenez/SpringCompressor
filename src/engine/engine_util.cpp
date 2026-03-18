@@ -6,6 +6,9 @@
 #include <meadow/cppext.h>
 
 #include <cmath>
+#include <complex>
+
+#include "pocketfft_hdronly.h"
 
 double exponential_moving_average_filter_coeff_from_cutoff_freq(double freq_hps)
 {
@@ -37,28 +40,21 @@ AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span
     assert(N > 0 && num_periods > 0 && num_periods < N);
     const double N_d = ifcast<double>(N);
 
-    // Compute |X[k]|² for a single DFT bin k using argument reduction.
-    // X[k] = sum_n x[n] * exp(-2πi*k*n/N)
-    // (k*n) mod N is computed exactly in integer arithmetic, keeping the trig argument
-    // in [0, 2π] regardless of n, which avoids large-argument precision loss entirely.
-    const double two_pi_over_N = 2.0 * num::pi / N_d;
-    auto dft_bin_power = [&](int k) -> double {
-        double re = 0, im = 0;
-        for (int n = 0; n < N; ++n) {
-            const auto kn_mod_N = ifcast<double>(k * n % N);
-            const double angle = -two_pi_over_N * kn_mod_N;
-            re += signal[sucast(n)] * cos(angle);
-            im += signal[sucast(n)] * sin(angle);
-        }
-        return re * re + im * im;
-    };
+    // Compute the real-to-complex FFT: output has N/2+1 bins (0..N/2).
+    const int num_bins = N / 2 + 1;
+    vector<std::complex<double>> spectrum(sucast(num_bins));
+    pocketfft::r2c(
+      {sucast(N)},                                            // shape_in
+      {iicast<std::ptrdiff_t>(sizeof(double))},               // stride_in (bytes)
+      {iicast<std::ptrdiff_t>(sizeof(std::complex<double>))}, // stride_out (bytes)
+      0,                                                      // axis
+      true,                                                   // forward
+      signal.data(),
+      spectrum.data(),
+      1.0 // fct (no normalization; matches our DFT convention)
+    );
 
-    // Spectral symmetry factors for a real signal:
-    //   DC (k=0):           reported = parseval = 1.0  — single bin, no mirror
-    //   0 < k < N/2:        reported = parseval = 2.0  — conjugate-mirror pair ±k
-    //   Nyquist (k=N/2):    parseval = 1.0 (discrete-time truth)
-    //                       reported = 0.5 (-Nyquist aliases onto +Nyquist, doubling
-    //                                  X[N/2]; halving recovers the continuous-time A²/2)
+    // Spectral symmetry factors — same as the direct DFT implementation.
     const bool has_nyquist_bin = is_even(N);
     auto parseval_factor = [&](int k) -> double {
         return (k == 0 || (has_nyquist_bin && k == N / 2)) ? 1.0 : 2.0;
@@ -67,13 +63,10 @@ AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span
         return (has_nyquist_bin && k == N / 2) ? 0.5 : parseval_factor(k);
     };
 
-    // Partition all bins [0..N/2] into DC, fundamental, harmonics, and rest.
-    // rest_power is accumulated as a direct sum of non-special bin powers rather than
-    // computed as (total − f0 − …), which would suffer catastrophic cancellation when
-    // most energy is in the fundamental.
+    // Partition bins [0..N/2] into DC, fundamental, harmonics, rest.
     double dc_power = 0, f0_power = 0, harmonics_power = 0, rest_power = 0;
-    for (int k = 0; k <= N / 2; k++) {
-        const double bp = dft_bin_power(k) / (N_d * N_d);
+    for (int k = 0; k < num_bins; k++) {
+        const double bp = std::norm(spectrum[sucast(k)]) / (N_d * N_d);
         if (k == 0) {
             dc_power = parseval_factor(0) * bp;
         } else if (k == num_periods) {

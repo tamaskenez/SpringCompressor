@@ -272,7 +272,7 @@ void test_harmonics(const EnginePars& pars, int T, double db, const StableGainTe
     // Instead of T, use T+0.5 to push all inharmonic distortion (because of above Nyquist harmonics) into k+0.5
     // harmonics.
     int TT = 2 * T + 1;
-    const auto engine = new_engine_ready_to_process(pars, T);
+    const auto engine = new_engine_ready_to_process(pars, TT);
     const auto test_signal_2_periods = make_test_signal(2, TT, matlab::db2mag(db + k_3_db));
     vector<float> buf;
     for (int sample_ix = 0; sample_ix < stable.samples_for_gain_to_stabilize; sample_ix += TT) {
