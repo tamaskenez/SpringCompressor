@@ -375,6 +375,7 @@ struct EngineImpl : public Engine {
 
         // We only need to actually recompute the internals if we're prepared to play and have a sample rate.
         if (prepared_to_play) {
+            const bool input_level_method_changed = pars.input_level_method != pars_arg.input_level_method;
             pars.input_level_method = pars_arg.input_level_method;
             switch (pars.input_level_method) {
             case EnginePars::InputLevelMethod::direct:
@@ -383,6 +384,9 @@ struct EngineImpl : public Engine {
                 if (pars.input_level_lpf != pars_arg.input_level_lpf) {
                     pars.input_level_lpf = pars_arg.input_level_lpf;
                     set_input_level_lpf(prepared_to_play->sample_rate);
+                }
+                if (input_level_method_changed) {
+                    input_level_lpf.reset();
                 }
                 break;
             case EnginePars::InputLevelMethod::multiband: {
@@ -393,10 +397,14 @@ struct EngineImpl : public Engine {
                     prepared_to_play->input_level_multiband =
                       make_input_level_multiband(prepared_to_play->sample_rate, prepared_to_play->max_block_size);
                 }
+                if (input_level_method_changed) {
+                    prepared_to_play->input_level_multiband.reset();
+                }
             } break;
             }
 
             // Set up GR filter.
+            bool gr_filter_mode_changed = pars.gr_filter_mode != pars_arg.gr_filter_mode;
             pars.gr_filter_mode = pars_arg.gr_filter_mode;
             switch (pars.gr_filter_mode) {
             case EnginePars::GRFilterMode::off:
@@ -408,6 +416,9 @@ struct EngineImpl : public Engine {
                 if (pars.gr_filter != pars_arg.gr_filter) {
                     pars.gr_filter = pars_arg.gr_filter;
                     set_gr_filter(prepared_to_play->sample_rate);
+                }
+                if (gr_filter_mode_changed) {
+                    gr_filter.reset();
                 }
                 break;
             }
