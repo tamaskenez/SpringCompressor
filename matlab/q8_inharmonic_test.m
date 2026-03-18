@@ -21,8 +21,14 @@ ns = [0:M-1]';
 x=cos(2*pi*ns/T);
 
 % Distortion
-Q = 1;xd = tanh(x/Q)*Q;
-xd = max(x,0);
+if 1
+    Q = 0;
+    if Q > 0
+        xd = tanh(x*Q)/Q;
+    end
+else
+    xd = max(x,0);
+end
 plot(ns,x,ns,xd);
 
 fx = abs(fft(x));
