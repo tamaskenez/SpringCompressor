@@ -99,3 +99,89 @@ TEST(engine_util_test, time_constant_samples_to_cutoff_hps)
     const auto actual_cutoff_hps = time_constant_samples_to_cutoff_hps(time_constant_samples);
     EXPECT_NEAR(cutoff_hps, actual_cutoff_hps, 1e-16);
 }
+
+TEST(engine_util_test, analyse_periodic_signal_harmonics)
+{
+    constexpr double k_silence_db = -135.0;
+    constexpr double eps = 1e-12;
+
+    for (size_t M : {8u, 9u, 97u, 98u}) {
+        vector<double> x(M);
+        // DC test
+        for (double dc_level : {0.0, 1.5, -3.5}) {
+            const auto dc_level_db = matlab::mag2db(abs(dc_level));
+            ra::fill(x, dc_level);
+            for (int np : {1, 2, 3}) {
+                const auto r = analyse_periodic_signal_harmonics(x, np);
+                EXPECT_NEAR(r.dc_db, dc_level_db, 1e-12);
+                EXPECT_LT(r.f0_db, k_silence_db);
+                EXPECT_LT(r.harmonics_db, k_silence_db);
+                EXPECT_LT(r.rest_db, k_silence_db);
+            }
+        }
+        // Harmonics test.
+        for (int h = 1; h < iicast<int>(M) / 2; ++h) {
+            for (double amplitude : {1.0, 0.125, 2.5}) {
+                const double rms_db = matlab::pow2db(square(amplitude) / 2);
+                for (double phase : {0.0, num::pi / 2, num::pi, num::pi * 3 / 2, 0.789 * num::pi}) {
+                    for (int num_periods : {1, 2, 3, 4}) {
+                        if (iicast<int>(M) < 2 * num_periods) // T < 2
+                            continue;
+                        // T=2 means the fundamental is at exactly Nyquist. Only a phase-0 cosine
+                        // produces a non-trivial signal (cos(pi*n)); any phase offset causes the
+                        // sine component sin(pi*n)=0 at integers, giving an all-zero signal.
+                        if (iicast<int>(M) == 2 * num_periods && phase != 0.0)
+                            continue;
+                        UNUSED const double T = ifcast<double>(M) / num_periods;
+
+                        int cbin = h * num_periods; // Which bin this signal would land if there were no aliasing.
+                        int bin = cbin % iicast<int>(M);
+                        if (bin > iicast<int>(M) / 2) {
+                            bin = iicast<int>(M) - bin;
+                        }
+                        if (bin == 0) {
+                            continue;
+                        }
+                        if (2 * bin == iicast<int>(M) && phase != 0) {
+                            continue;
+                        }
+                        bool fundamental = bin == num_periods;
+                        bool harmonics = !fundamental && bin % num_periods == 0;
+
+                        for (size_t i = 0; i < M; ++i) {
+                            x[i] = amplitude * cos(h * num_periods * 2 * num::pi * i / M + phase);
+                        }
+                        const auto r = analyse_periodic_signal_harmonics(x, num_periods);
+                        EXPECT_LT(r.dc_db, k_silence_db);
+                        if (fundamental) {
+                            EXPECT_NEAR(r.f0_db, rms_db, eps);
+                            EXPECT_LT(r.harmonics_db, k_silence_db);
+                            EXPECT_LT(r.rest_db, k_silence_db);
+                        } else if (harmonics) {
+                            EXPECT_LT(r.f0_db, k_silence_db);
+                            EXPECT_NEAR(r.harmonics_db, rms_db, eps);
+                            EXPECT_LT(r.rest_db, k_silence_db);
+                        } else {
+                            EXPECT_LT(r.f0_db, k_silence_db);
+                            EXPECT_LT(r.harmonics_db, k_silence_db);
+                            EXPECT_NEAR(r.rest_db, rms_db, eps);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST(engine_util_test, analyse_periodic_signal_levels_of_distortion)
+{
+    size_t M = 97;
+    int k = 13;
+    vector<double> x(M);
+    for (unsigned i = 0; i < M; ++i) {
+        x[i] = cos(k * 2 * num::pi * i / M);
+    }
+    UNUSED const auto r = analyse_periodic_signal_harmonics(x, k);
+    EXPECT_LT(r.rest_db, -280);
+    NOP;
+}
