@@ -15,6 +15,12 @@ public:
     // Margins reserved for axis labels.
     static constexpr int k_margin_left = 30;
     static constexpr int k_margin_bottom = 14;
+    static constexpr int k_margin_top = 14;
+
+    // Stored coordinate range set by the last draw_grid() call.
+    float min_x = 0, max_x = 1, min_y = 0, max_y = 1;
+
+    juce::Image image;
 
     void draw_grid(float min_x, float max_x, float min_y, float max_y, float x_step, float y_step);
 
@@ -25,8 +31,8 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
-    // Stored coordinate range set by the last draw_grid() call.
-    float min_x = 0, max_x = 1, min_y = 0, max_y = 1;
-
-    juce::Image image;
+    [[nodiscard]] float x_to_px(float x) const;
+    [[nodiscard]] float y_to_py(float y) const;
+    [[nodiscard]] int get_plot_w() const;
+    [[nodiscard]] int get_plot_h() const;
 };
