@@ -500,6 +500,25 @@ void SpringCompressorProcessor::redraw_scope()
             }
         }
     };
+
+    const auto hdist_ihdist = [&](bool ihdist) {
+        auto& hmd = sd.harmonic_distortion_matrix;
+        if (!hmd.freqs_hz.empty() && !hmd.levels_db.empty()) {
+            const auto& ms = ihdist ? hmd.inharmonic_distortion_db_by_freq_and_level()
+                                    : hmd.harmonic_distortion_db_by_freq_and_level();
+            vector<AF2> xy;
+            xy.reserve(hmd.freqs_hz.size());
+            e->draw_scope_grid(hmd.freqs_hz[0], hmd.freqs_hz.back(), -180, 0, 500, 20);
+            for (unsigned db_ix = 0; db_ix < hmd.levels_db.size(); db_ix++) {
+                xy.clear();
+                for (unsigned freq_ix = 0; freq_ix < hmd.freqs_hz.size(); freq_ix++) {
+                    const auto y = ms[freq_ix, db_ix];
+                    xy.push_back(AF2{hmd.freqs_hz[freq_ix], y});
+                }
+                e->add_plot_to_scope(xy, juce::Colours::white);
+            }
+        }
+    };
     switch (iround<int>(raw_parameter_values.scope_mode->load())) {
     case 0:
         // transfer
@@ -540,8 +559,10 @@ void SpringCompressorProcessor::redraw_scope()
         attack_release(true);
         break;
     case 3: // hdist
+        hdist_ihdist(false);
         break;
     case 4: // inhdist
+        hdist_ihdist(true);
         break;
     case 5: // threshold
         break;
