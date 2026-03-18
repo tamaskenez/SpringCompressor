@@ -1,5 +1,6 @@
 #include "generate_scope_data.h"
 
+#include "engine_util.h"
 #include "meadow/math.h"
 
 #include <meadow/cppext.h>
@@ -8,7 +9,7 @@
 
 namespace
 {
-constexpr double k_semitones_per_test_freq = 2.0;
+constexpr double k_semitones_per_test_freq = 6.0;
 constexpr int k_dbs_per_test_level = 1;
 constexpr double k_lowest_test_freq = 40.0;
 constexpr double k_highest_test_freq = 12000;
@@ -265,6 +266,29 @@ test_attack_and_release(const EnginePars& pars, int T, double step_db, const Sta
       .attack_db_by_ms = MOVE(attack_db_by_ms), .release_db_by_ms = vector<AF2>(release_db_by_ms)
     };
 }
+
+void test_harmonics(const EnginePars& pars, int T, double db, const StableGainTestResult& stable)
+{
+    // Instead of T, use T+0.5 to push all inharmonic distortion (because of above Nyquist harmonics) into k+0.5
+    // harmonics.
+    int TT = 2 * T + 1;
+    const auto engine = new_engine_ready_to_process(pars, T);
+    const auto test_signal_2_periods = make_test_signal(2, TT, matlab::db2mag(db + k_3_db));
+    vector<float> buf;
+    for (int sample_ix = 0; sample_ix < stable.samples_for_gain_to_stabilize; sample_ix += TT) {
+        buf = test_signal_2_periods;
+        float* const channel = buf.data();
+        engine->process_block(span(&channel, 1), TT);
+    }
+    {
+        buf = test_signal_2_periods;
+        float* const channel = buf.data();
+        engine->process_block(span(&channel, 1), TT);
+        vector<double> dbuf(buf.size());
+        ra::copy(buf, dbuf.begin());
+        UNUSED auto r = analyse_periodic_signal_harmonics(dbuf, 2);
+    }
+}
 } // namespace
 
 ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<int64_t>* current_request_id)
@@ -338,19 +362,21 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
               }
             );
         }
-#if 0
-        auto r = get_lowest_input_rms_db_to_switch_on_compressor(pars, T);
-        const double freq_hz = k_sample_rate / T;
-        auto& outputs_at_freq = scope_data.transfer_graph.transfers_by_freq.emplace_back();
-        outputs_at_freq.freq_hz = ffcast<float>(freq_hz);
-        outputs_at_freq.input_output_db.reserve(r.size());
-        for (auto x : r) {
-            outputs_at_freq.input_output_db.push_back(
-              AF2{ffcast<float>(x.input_rms_db), ffcast<float>(x.input_rms_db + x.gain_db)}
-            );
+    }
+
+    // Test harmonics
+    const vector<double> harmonic_dbs = {-4, -10, -16, -22};
+    for (auto T : Ts) {
+        auto& tr = test_results.at(T);
+
+        for (auto db : harmonic_dbs) {
+            auto& sg = tr.stable_gain_at_input_levels;
+            auto me = ra::min_element(sg, {}, [db](const StableGainTestResult& a) {
+                return abs(a.input_rms_db - db);
+            });
+            assert(me != sg.end());
+            test_harmonics(pars, T, db, *me);
         }
-        test_results[freq_hz].stable_gain_at_input_levels = MOVE(r);
-#endif
     }
 
     return scope_data;

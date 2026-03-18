@@ -62,3 +62,14 @@ inline double time_constant_samples_to_cutoff_hps(double time_constant_samples)
 {
     return 1.0 / (std::numbers::pi * time_constant_samples);
 }
+
+struct AnalysePeriodicSignalHarmonicsResult {
+    double dc_db;        // The power of the DC component, in dBFS.
+    double f0_db;        // The power of the fundamental, in dBFS.
+    double harmonics_db; // The power of the harmonics (up to Nyquist), excluding the fundamental, in dBFS.
+    double rest_db;      // The remaining power of the signal which contains aliasing distortion and noise.
+};
+// The span `signal` contains `num_periods` of a periodic signal.
+// That is, `T = double(signal.size()) / num_periods`, in samples.
+// The function calculates the powers of the DC, fundamental, harmonic components, and the remaining power.
+AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span<const double> signal, int num_periods);
