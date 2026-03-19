@@ -305,6 +305,10 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
     if (pars.transfer_curve.ratio == 1.0f) {
         return {};
     }
+    if (current_request_id && current_request_id->load() != request_id) {
+        return {};
+    }
+
     // Clear makeup gain.
     pars.transfer_curve.makeup_gain_db = 0;
     pars.transfer_curve.reference_level_db = -INFINITY;
