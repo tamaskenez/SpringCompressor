@@ -116,9 +116,9 @@ SpringCompressorEditor::SpringCompressorEditor(
     addAndMakeVisible(transfer_curve_component);
     addAndMakeVisible(scope);
 
-    setSize(800, 20 + 120 + 18 * 28);
+    setSize(1000, 20 + 120 + 18 * 28);
 
-    draw_scope_grid(0, 100, 0, 2, 10, .1f);
+    draw_scope_grid(0, 100, 0, 2, false);
 }
 
 void SpringCompressorEditor::paint(juce::Graphics& g)
@@ -174,11 +174,9 @@ void SpringCompressorEditor::resized()
     layout(scope_freq_label, scope_freq);
 }
 
-void SpringCompressorEditor::draw_scope_grid(
-  float min_x, float max_x, float min_y, float max_y, float x_step, float y_step
-)
+void SpringCompressorEditor::draw_scope_grid(float min_x, float max_x, float min_y, float max_y, bool log_x)
 {
-    scope.draw_grid(min_x, max_x, min_y, max_y, x_step, y_step);
+    scope.draw_grid(min_x, max_x, min_y, max_y, log_x);
 }
 
 void SpringCompressorEditor::add_plot_to_scope(span<const AF2> plot, const juce::Colour& color)

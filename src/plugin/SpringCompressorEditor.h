@@ -72,7 +72,7 @@ public:
     // Draw the vertical grid lines at the x coordinates where x is multiple of x_step. Draw the horizontal
     // grid lines at the y coordinates where y is a multiple of y_step. The min_x, max_x, min_y and max_y
     // will be stored along the image for use in other draw_scope functions.
-    void draw_scope_grid(float min_x, float max_x, float min_y, float max_y, float x_step, float y_step);
+    void draw_scope_grid(float min_x, float max_x, float min_y, float max_y, bool log_x);
     void add_plot_to_scope(span<const AF2> plot, const juce::Colour& color);
 
     void set_scope_freq_values(vector<float> freqs)

@@ -9,7 +9,7 @@
 class TransferCurveComponent : public juce::Component
 {
 public:
-    static constexpr int k_db_min = -60;
+    static constexpr int k_db_min = -80;
     static constexpr int k_db_max = 0;
     static constexpr int k_grid_spacing_db = 10;
     static constexpr int k_pixel_per_db = 4;

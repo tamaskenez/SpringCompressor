@@ -486,14 +486,8 @@ void SpringCompressorProcessor::redraw_scope()
             const auto freq_ix = std::min(ifloor<size_t>(freq_percent * ifcast<float>(sg.size())), sg.size() - 1);
             auto& t = sg[freq_ix];
             const float max_ms = 50;
-            const float ms_step = 10;
             e->draw_scope_grid(
-              0,
-              max_ms,
-              release ? -t.step_graphs.back().step_db : 0,
-              release ? 0 : t.step_graphs.back().step_db,
-              ms_step,
-              10
+              0, max_ms, release ? -t.step_graphs.back().step_db : 0, release ? 0 : t.step_graphs.back().step_db, false
             );
             for (auto& s : t.step_graphs) {
                 e->add_plot_to_scope(release ? s.release_out_db_by_ms : s.attack_out_db_by_ms, juce::Colours::white);
@@ -508,7 +502,7 @@ void SpringCompressorProcessor::redraw_scope()
                                     : hmd.harmonic_distortion_db_by_freq_and_level();
             vector<AF2> xy;
             xy.reserve(hmd.freqs_hz.size());
-            e->draw_scope_grid(hmd.freqs_hz[0], hmd.freqs_hz.back(), -180, 0, 500, 20);
+            e->draw_scope_grid(hmd.freqs_hz[0], hmd.freqs_hz.back(), -180, 0, true);
             for (unsigned db_ix = 0; db_ix < hmd.levels_db.size(); db_ix++) {
                 xy.clear();
                 for (unsigned freq_ix = 0; freq_ix < hmd.freqs_hz.size(); freq_ix++) {
@@ -539,7 +533,7 @@ void SpringCompressorProcessor::redraw_scope()
                   tg.transfers_by_freq.size() - 1
                 );
                 auto& g = tg.transfers_by_freq[freq_ix];
-                e->draw_scope_grid(-60, 0, -60, 0, 10, 10);
+                e->draw_scope_grid(-60, 0, -60, 0, false);
                 constexpr float lowest_db = -60.0f;
                 if (lowest_db < g.input_output_db[0][0]) {
                     vector<AF2> vs = {
