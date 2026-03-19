@@ -72,6 +72,9 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
     // We pick the smaller one.
     const auto min_amp_db = ifloor<int>(pars.transfer_curve.threshold_db);
     vector<StableGainTestResult> results;
+    const auto R = iicast<size_t>(std::max(0, -min_amp_db / k_dbs_per_test_level) + 1);
+    results.reserve(R);
+    UNUSED bool reached_no_compression = false;
     for (int amp_db = 0; amp_db >= min_amp_db; amp_db -= k_dbs_per_test_level) {
         // Generate one period of input signal.
         // Subtracting 0.1 dB to leave room for numeric errors and still have all samples -1 .. 1
@@ -159,11 +162,12 @@ vector<StableGainTestResult> get_lowest_input_rms_db_to_switch_on_compressor(con
               }
             );
         } else {
+            reached_no_compression = true;
             break;
         }
     }
     ra::reverse(results);
-
+    assert(reached_no_compression);
     return results;
 }
 
@@ -319,29 +323,74 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
     }
     ra::reverse(Ts);
 
+    vector<pair<string, double>> durs;
+    auto t0 = chr::steady_clock::now();
     // Test RMS transfer characteristics with steady signals.
     struct TestResultsAtFreq {
         vector<StableGainTestResult> stable_gain_at_input_levels;
     };
     std::map<int, TestResultsAtFreq> test_results;
     ScopeData scope_data;
-    for (auto T : Ts) {
-        if (current_request_id && current_request_id->load() != request_id)
-            return {};
-        // Test with signal with period T.
-        auto r = get_lowest_input_rms_db_to_switch_on_compressor(pars, T);
-        // Put the result in scope_data and test_results.
-        const double freq_hz = k_sample_rate / T;
-        auto& outputs_at_freq = scope_data.transfer_graph.transfers_by_freq.emplace_back();
-        outputs_at_freq.freq_hz = ffcast<float>(freq_hz);
-        outputs_at_freq.input_output_db.reserve(r.size());
-        for (auto x : r) {
-            outputs_at_freq.input_output_db.push_back(
-              AF2{ffcast<float>(x.input_rms_db), ffcast<float>(x.input_rms_db + x.gain_db)}
-            );
-        }
-        test_results[T].stable_gain_at_input_levels = MOVE(r);
+    struct ThreadContext {
+        std::jthread thread;
+        vector<size_t> ixs;
+        vector<vector<StableGainTestResult>> rs;
+    };
+    const auto NT = std::max(1u, std::thread::hardware_concurrency());
+    std::vector<ThreadContext> threads(NT);
+    for (auto& t : threads) {
+        t.ixs.reserve((Ts.size() + NT - 1) / NT);
     }
+    for (unsigned ix = 0, next_thread_ix = 0; ix < Ts.size(); ++ix) {
+        threads[next_thread_ix].ixs.push_back(ix);
+        next_thread_ix = (next_thread_ix + 1) % NT;
+    }
+
+    for (auto& t : threads) {
+        t.thread = std::jthread([&]() {
+            t.rs.reserve(t.ixs.size());
+            for (auto ix : t.ixs) {
+                // Test with signal with period T.
+                t.rs.emplace_back(get_lowest_input_rms_db_to_switch_on_compressor(pars, Ts[ix]));
+                if (current_request_id && current_request_id->load() != request_id) {
+                    return;
+                }
+            }
+        });
+    }
+    for (auto& t : threads) {
+        t.thread.join();
+    }
+
+    if (current_request_id && current_request_id->load() != request_id) {
+        return {};
+    }
+
+    scope_data.transfer_graph.transfers_by_freq.resize(Ts.size());
+    for (auto& t : threads) {
+        const auto N = t.ixs.size();
+        assert(N == t.rs.size());
+        for (size_t rs_ix = 0; rs_ix < N; ++rs_ix) {
+            const auto ix = t.ixs[rs_ix];
+            const auto T = Ts[ix];
+            auto& r = t.rs[rs_ix];
+            // Put the result in scope_data and test_results.
+            const double freq_hz = k_sample_rate / T;
+            auto& outputs_at_freq = scope_data.transfer_graph.transfers_by_freq[ix];
+            outputs_at_freq.freq_hz = ffcast<float>(freq_hz);
+            outputs_at_freq.input_output_db.reserve(r.size());
+            for (auto& x : r) {
+                outputs_at_freq.input_output_db.push_back(
+                  AF2{ffcast<float>(x.input_rms_db), ffcast<float>(x.input_rms_db + x.gain_db)}
+                );
+            }
+            test_results[T].stable_gain_at_input_levels = MOVE(r);
+        }
+    }
+
+    auto t1 = chr::steady_clock::now();
+    durs.push_back(pair("steady", chr::duration<double>(t1 - t0).count()));
+    t0 = t1;
 
     // Test attack and release.
     vector<double> step_dbs = {6, 12, 18, 24};
@@ -369,6 +418,10 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
         }
     }
 
+    t1 = chr::steady_clock::now();
+    durs.push_back(pair("attack/release", chr::duration<double>(t1 - t0).count()));
+    t0 = t1;
+
     // Test harmonics
     const vector<double> harmonic_dbs = {-22, -16, -10, -4};
     auto& hmd = scope_data.harmonic_distortion_matrix;
@@ -395,6 +448,15 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
             hmd.inharmonic_distortion_db_by_freq_and_level()[T_ix, db_ix] = ffcast<float>(result.tid_db());
         }
     }
+
+    t1 = chr::steady_clock::now();
+    durs.push_back(pair("harmonics", chr::duration<double>(t1 - t0).count()));
+    t0 = t1;
+
+    for (auto [s, d] : durs) {
+        println("Duration: {} {} msec", s, round(d * 1000.0));
+    }
+
     return scope_data;
 }
 
