@@ -151,13 +151,21 @@ void TransferCurveComponent::update_rms_dots(
     }
 
     juce::Image::BitmapData bm(rms_overlay, juce::Image::BitmapData::writeOnly);
-    constexpr int M = 2;
-    constexpr int raster_grid_size = M * k_pixel_per_db;
-    for (int py = 0; py < h; ++py) {
-        const bool y_grid = (py + raster_grid_size / 2) % raster_grid_size == 0;
-        for (int px = 0; px < w; ++px) {
-            float m = y_grid || ((px + raster_grid_size / 2) % raster_grid_size == 0) ? 0.4f : 1.0f;
-            bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, m * buf[ucast(py * w + px)])));
+    if ((false)) {
+        constexpr int M = 2;
+        constexpr int raster_grid_size = M * k_pixel_per_db;
+        for (int py = 0; py < h; ++py) {
+            const bool y_grid = (py + raster_grid_size / 2) % raster_grid_size == 0;
+            for (int px = 0; px < w; ++px) {
+                float m = y_grid || ((px + raster_grid_size / 2) % raster_grid_size == 0) ? 0.4f : 1.0f;
+                bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, m * buf[ucast(py * w + px)])));
+            }
+        }
+    } else {
+        for (int py = 0; py < h; ++py) {
+            for (int px = 0; px < w; ++px) {
+                bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, buf[ucast(py * w + px)])));
+            }
         }
     }
     repaint();

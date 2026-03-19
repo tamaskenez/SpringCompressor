@@ -410,7 +410,7 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
                           output_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1
                         )) {
                         const auto db_to_index = [](float db) {
-                            constexpr int M = 2;
+                            constexpr int M = 1;
                             const int db_int = iround<int>(db);
                             return db_int - modulo(db_int, M) - TransferCurveComponent::k_db_min;
                         };
