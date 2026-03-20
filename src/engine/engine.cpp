@@ -44,11 +44,11 @@ struct EngineImpl : public Engine {
 
     EnginePars pars;
     optional<PreparedToPlay> prepared_to_play;
-    vector<double> sidechain_buf;
+    vector<double> sidechain_buf, input_sidechain_buf;
 
     EnvelopeFilter<double> input_level_lpf;
     TransferCurve transfer_curve;
-    EnvelopeFilter<double> gr_filter;
+    EnvelopeFilter<double> gr_filter, mod_filter;
 
     RmsDetector input_rms, output_rms;
     int rms_sample_counter = 0;
@@ -106,6 +106,13 @@ struct EngineImpl : public Engine {
         );
     }
 
+    void set_mod_filter(double sample_rate_arg)
+    {
+        mod_filter = EnvelopeFilter<double>(
+          EnvelopeFilterOutputType::lowpass, pars.mod.lpf_order, nullopt, sample_rate_arg / pars.mod.lpf_freq_hz
+        );
+    }
+
     void prepare_to_play(double sr, int maxBlockSize, UNUSED int num_channels) override
     {
         prepared_to_play = PreparedToPlay{
@@ -115,10 +122,12 @@ struct EngineImpl : public Engine {
         };
 
         sidechain_buf.reserve(prepared_to_play->max_block_size);
+        input_sidechain_buf.reserve(prepared_to_play->max_block_size);
 
         set_input_level_lpf(prepared_to_play->sample_rate);
         transfer_curve.set(pars.transfer_curve);
         set_gr_filter(prepared_to_play->sample_rate);
+        set_mod_filter(prepared_to_play->sample_rate);
 
         // Initialize RMS sample counter.
         rms_sample_counter = 0;
@@ -139,6 +148,7 @@ struct EngineImpl : public Engine {
         prepared_to_play = nullopt;
         rms_samples = vector<AF2>();
         sidechain_buf = vector<double>();
+        input_sidechain_buf = vector<double>();
     }
 
     void debug_verify_samples(UNUSED span<const double> samples) const
@@ -238,115 +248,162 @@ struct EngineImpl : public Engine {
         measure_rms(channel_data, input_rms, 0, rms_sample_counter);
 
         // sidechain_buf is ready to be processed into the gain signal.
-
-        // First, convert it to an input level and apply the transfer curve.
-        switch (pars.input_level_method) {
-        case EnginePars::InputLevelMethod::direct:
-            debug_verify_samples(sidechain_buf);
-            for (auto& s : sidechain_buf) {
-                s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::mag2db(std::abs(s)));
-            }
-            break;
-        case EnginePars::InputLevelMethod::lpf:
-            input_level_lpf.process(sidechain_buf);
-            debug_verify_samples(sidechain_buf);
-            if (pars.input_level_lpf.rms) {
+        if (pars.mod.enable) {
+            input_sidechain_buf = sidechain_buf;
+            switch (pars.input_level_method) {
+            case EnginePars::InputLevelMethod::direct:
                 for (auto& s : sidechain_buf) {
-                    s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::pow2db(s));
+                    s = square(s);
                 }
-            } else {
+                break;
+            case EnginePars::InputLevelMethod::lpf:
+                input_level_lpf.process(sidechain_buf);
+                if (!pars.input_level_lpf.rms) {
+                    for (auto& s : sidechain_buf) {
+                        s = square(s);
+                    }
+                }
+                break;
+            case EnginePars::InputLevelMethod::multiband:
+                prepared_to_play->input_level_multiband.process(sidechain_buf);
+                break;
+            }
+            // At this point, we have a filter sample^2 like signal in sidechain_buf.
+            const double k_small_power = matlab::db2pow(-50.0);
+            for (unsigned i = 0; i < sucast(num_samples); ++i) {
+                auto& s = sidechain_buf[i];
+                s = std::max(s, 0.0);
+                // Normalize.
+                if (s < k_small_power) {
+                    s = (s / square(k_small_power)) * (square(input_sidechain_buf[i]) - s);
+                } else {
+                    s = (square(input_sidechain_buf[i]) - s) / s;
+                }
+                s = tanh(s * pars.mod.tanh_k) / pars.mod.tanh_k;
+                if (std::isnan(s)) {
+                    assert(false);
+                    s = 0;
+                }
+            }
+            mod_filter.process(sidechain_buf);
+            for (auto& s : sidechain_buf) {
+                s = 1 + s * pars.mod.gain;
+            }
+            // Apply linear gain to channel data.
+            for (auto chd : channel_data) {
+                for (unsigned i = 0; i < sucast(num_samples); ++i) {
+                    chd[i] = ffcast<float>(chd[i] * sidechain_buf[i]);
+                }
+            }
+        } else {
+            // First, convert it to an input level and apply the transfer curve.
+            switch (pars.input_level_method) {
+            case EnginePars::InputLevelMethod::direct:
+                debug_verify_samples(sidechain_buf);
                 for (auto& s : sidechain_buf) {
-                    s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::mag2db(s));
+                    s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::mag2db(std::abs(s)));
                 }
+                break;
+            case EnginePars::InputLevelMethod::lpf:
+                input_level_lpf.process(sidechain_buf);
+                debug_verify_samples(sidechain_buf);
+                if (pars.input_level_lpf.rms) {
+                    for (auto& s : sidechain_buf) {
+                        s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::pow2db(s));
+                    }
+                } else {
+                    for (auto& s : sidechain_buf) {
+                        s = transfer_curve.gain_db_for_input_db_without_makeup(matlab::mag2db(s));
+                    }
+                }
+                break;
+            case EnginePars::InputLevelMethod::multiband:
+                prepared_to_play->input_level_multiband.process(sidechain_buf);
+                debug_verify_samples(sidechain_buf);
+                for (auto& s : sidechain_buf) {
+                    const auto s0 = transfer_curve.gain_db_for_input_db_without_makeup(matlab::pow2db(s));
+                    assert(s0 <= 0);
+                    s = std::min(s0, 0.0);
+                }
+                break;
             }
-            break;
-        case EnginePars::InputLevelMethod::multiband:
-            prepared_to_play->input_level_multiband.process(sidechain_buf);
-            debug_verify_samples(sidechain_buf);
-            for (auto& s : sidechain_buf) {
-                const auto s0 = transfer_curve.gain_db_for_input_db_without_makeup(matlab::pow2db(s));
-                assert(s0 <= 0);
-                s = std::min(s0, 0.0);
-            }
-            break;
-        }
 
-        debug_verify_decibels(sidechain_buf);
+            debug_verify_decibels(sidechain_buf);
 
-        // Apply GR-filtering.
-        switch (pars.gr_filter_mode) {
-        case EnginePars::GRFilterMode::off:
-            for (auto& s : sidechain_buf) {
-                const auto s0 = matlab::db2mag(s);
-                assert(in_cc_range(s0, 0, 1));
-                s = clamp(s0, 0.0, 1.0);
-            }
-            // At this point, sidechain_buf contains linear gain values.
-            break;
-        case EnginePars::GRFilterMode::mag:
-            // Map the -INF .. 0 dB range to 1 .. 0 (reverse) because the 0 dB = 1.0 is the "no-signal" value.
-            for (auto& s : sidechain_buf) {
-                const auto s0 = 1 - matlab::db2mag(s);
-                assert(in_cc_range(s0, 0, 1));
-                s = clamp(s0, 0.0, 1.0);
-            }
-            // At this point, sidechain_buf contains linear gain values.
-            // Note: gr filter should be set up for amplitude filtering.
-            gr_filter.process(sidechain_buf);
-            // Reverse back.
-            for (auto& s : sidechain_buf) {
-                const auto s0 = 1 - s;
-                assert(in_cc_range(s0, 0, 1));
-                s = clamp(s0, 0.0, 1.0);
-            }
-            // At this point, sidechain_buf contains linear gain values.
-            break;
-        case EnginePars::GRFilterMode::pow:
-            // Map the -INF .. 0 dB range to 1 .. 0 (reverse) because the 0 dB = 1.0 is the "no-signal" value.
-            for (auto& s : sidechain_buf) {
-                const auto s0 = 1 - matlab::db2pow(s);
-                assert(in_cc_range(s0, 0, 1));
-                s = clamp(s0, 0.0, 1.0);
-            }
-            // Note: gr filter should be set up for amplitude filtering to prevent squaring the already squared
-            // signal.
-            gr_filter.process(sidechain_buf);
-            // At this point, sidechain_buf contains squared gain values.
-            // Reverse back.
-            for (auto& s : sidechain_buf) {
-                const auto s0 = 1 - s;
-                assert(in_cc_range(s0, 0, 1));
-                s = sqrt(clamp(s0, 0.0, 1.0));
-            }
-            // At this point, sidechain_buf contains linear gain values.
-            break;
-        case EnginePars::GRFilterMode::db:
-            // Note: gr filter should be set up for amplitude filtering.
-            // TODO: remove this
-            {
-                const auto before = sidechain_buf;
-                gr_filter.process(sidechain_buf);
-                // At this point, sidechain_buf contains dB gain values.
+            // Apply GR-filtering.
+            switch (pars.gr_filter_mode) {
+            case EnginePars::GRFilterMode::off:
                 for (auto& s : sidechain_buf) {
                     const auto s0 = matlab::db2mag(s);
-                    assert(s0 <= 1);
-                    s = std::min(s0, 1.0);
+                    assert(in_cc_range(s0, 0, 1));
+                    s = clamp(s0, 0.0, 1.0);
                 }
+                // At this point, sidechain_buf contains linear gain values.
+                break;
+            case EnginePars::GRFilterMode::mag:
+                // Map the -INF .. 0 dB range to 1 .. 0 (reverse) because the 0 dB = 1.0 is the "no-signal" value.
+                for (auto& s : sidechain_buf) {
+                    const auto s0 = 1 - matlab::db2mag(s);
+                    assert(in_cc_range(s0, 0, 1));
+                    s = clamp(s0, 0.0, 1.0);
+                }
+                // At this point, sidechain_buf contains linear gain values.
+                // Note: gr filter should be set up for amplitude filtering.
+                gr_filter.process(sidechain_buf);
+                // Reverse back.
+                for (auto& s : sidechain_buf) {
+                    const auto s0 = 1 - s;
+                    assert(in_cc_range(s0, 0, 1));
+                    s = clamp(s0, 0.0, 1.0);
+                }
+                // At this point, sidechain_buf contains linear gain values.
+                break;
+            case EnginePars::GRFilterMode::pow:
+                // Map the -INF .. 0 dB range to 1 .. 0 (reverse) because the 0 dB = 1.0 is the "no-signal" value.
+                for (auto& s : sidechain_buf) {
+                    const auto s0 = 1 - matlab::db2pow(s);
+                    assert(in_cc_range(s0, 0, 1));
+                    s = clamp(s0, 0.0, 1.0);
+                }
+                // Note: gr filter should be set up for amplitude filtering to prevent squaring the already squared
+                // signal.
+                gr_filter.process(sidechain_buf);
+                // At this point, sidechain_buf contains squared gain values.
+                // Reverse back.
+                for (auto& s : sidechain_buf) {
+                    const auto s0 = 1 - s;
+                    assert(in_cc_range(s0, 0, 1));
+                    s = sqrt(clamp(s0, 0.0, 1.0));
+                }
+                // At this point, sidechain_buf contains linear gain values.
+                break;
+            case EnginePars::GRFilterMode::db:
+                // Note: gr filter should be set up for amplitude filtering.
+                // TODO: remove this
+                {
+                    const auto before = sidechain_buf;
+                    gr_filter.process(sidechain_buf);
+                    // At this point, sidechain_buf contains dB gain values.
+                    for (auto& s : sidechain_buf) {
+                        const auto s0 = matlab::db2mag(s);
+                        assert(s0 <= 1);
+                        s = std::min(s0, 1.0);
+                    }
+                }
+                // At this point, sidechain_buf contains linear gain values.
+                break;
             }
             // At this point, sidechain_buf contains linear gain values.
-            break;
-        }
-        // At this point, sidechain_buf contains linear gain values.
-        debug_verify_gain_values(sidechain_buf);
+            debug_verify_gain_values(sidechain_buf);
 
-        // Apply linear gain to channel data.
-        const auto make_up_gain_linear = matlab::db2mag(transfer_curve.get_makeup_gain_below_threshold_db());
-        for (auto chd : channel_data) {
-            for (unsigned i = 0; i < sucast(num_samples); ++i) {
-                chd[i] = ffcast<float>(chd[i] * sidechain_buf[i] * make_up_gain_linear);
+            // Apply linear gain to channel data.
+            const auto make_up_gain_linear = matlab::db2mag(transfer_curve.get_makeup_gain_below_threshold_db());
+            for (auto chd : channel_data) {
+                for (unsigned i = 0; i < sucast(num_samples); ++i) {
+                    chd[i] = ffcast<float>(chd[i] * sidechain_buf[i] * make_up_gain_linear);
+                }
             }
         }
-
         // Measure output RMS.
         rms_sample_counter = measure_rms(channel_data, output_rms, 1, rms_sample_counter);
     }
@@ -421,6 +478,15 @@ struct EngineImpl : public Engine {
                     gr_filter.reset();
                 }
                 break;
+            }
+
+            // Set up mod filter.
+            bool mod_filter_mode_changed =
+              pars.mod.lpf_order != pars_arg.mod.lpf_order || pars.mod.lpf_freq_hz != pars_arg.mod.lpf_freq_hz;
+            pars.mod = pars_arg.mod;
+            if (mod_filter_mode_changed) {
+                set_mod_filter(prepared_to_play->sample_rate);
+                mod_filter.reset();
             }
         } else {
             // Everything will be updated in prepare_to_play when we do have the sample_rate.

@@ -58,6 +58,13 @@ struct EnginePars {
         float release_time_sec = 0.1f;   // 1/cutoff
         bool operator==(const GRFilter&) const = default;
     } gr_filter;
+    struct Mod {
+        bool enable = false;
+        float tanh_k = 1.0f;
+        float gain = 1.0f;
+        int lpf_order = 1;
+        float lpf_freq_hz = 500;
+    } mod;
 };
 
 class Engine
