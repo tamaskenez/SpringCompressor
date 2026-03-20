@@ -14,7 +14,7 @@
 
 namespace
 {
-constexpr double k_rms_detector_hz = 2.1;
+constexpr double k_rms_detector_hz = 2.1 * 4.0;
 
 template<class T>
 bool is_normal_or_zero(T x)

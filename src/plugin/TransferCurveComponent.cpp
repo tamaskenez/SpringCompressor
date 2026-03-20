@@ -1,5 +1,7 @@
 #include "TransferCurveComponent.h"
 
+#include "meadow/math.h"
+
 #include <meadow/cppext.h>
 
 #include <climits>
@@ -164,7 +166,14 @@ void TransferCurveComponent::update_rms_dots(
     } else {
         for (int py = 0; py < h; ++py) {
             for (int px = 0; px < w; ++px) {
-                bm.setPixelColour(px, py, juce::Colours::white.withAlpha(std::min(1.f, buf[ucast(py * w + px)])));
+                const auto p = buf[ucast(py * w + px)];
+                const auto c1 = juce::Colours::white.withAlpha(std::min(1.f, p));
+                const auto c2 = juce::Colours::red.withAlpha(std::min(1.f, p));
+                const float t1 = 1.0f;
+                const float t2 = 3.0f;
+                const float a = 1.0f / (t2 - t1);
+                const float b = -a * t1;
+                bm.setPixelColour(px, py, c1.interpolatedWith(c2, std::clamp(a * p + b, 0.00f, 1.00f)));
             }
         }
     }
