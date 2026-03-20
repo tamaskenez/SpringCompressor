@@ -91,11 +91,13 @@ private:
     // New sliders (declaration must precede their SliderAttachments below)
     juce::Slider levellpf_attack, levellpf_release, levelmb_freqlo, levelmb_freqhi, levelmb_peroctave, levelmb_lpratio,
       levelmb_minrelease, grlp_attack, grlp_release;
+    juce::Slider mod_lpf_freq, mod_gain, mod_tanh;
 
     // Radio button groups
     RadioButtonGroup level_method, levellpf_mode, levellpf_order, levelmb_order, levelmb_lporder, grlp_enable,
       grlp_order;
     RadioButtonGroup scope_mode;
+    RadioButtonGroup mod_enable, mod_lpf_order;
 
     // New sliders for scope controls (declaration must precede SliderAttachment below)
     juce::Slider scope_freq;
@@ -106,6 +108,7 @@ private:
       levelmb_lporder_label, levelmb_lpratio_label, levelmb_minrelease_label, grlp_enable_label, grlp_order_label,
       grlp_attack_label, grlp_release_label;
     juce::Label scope_mode_label, scope_freq_label;
+    juce::Label mod_enable_label, mod_lpf_order_label, mod_lpf_freq_label, mod_gain_label, mod_tanh_label;
 
     TransferCurveComponent transfer_curve_component;
     ScopeComponent scope;
@@ -117,6 +120,7 @@ private:
       levelmb_freqhi_attachment, levelmb_peroctave_attachment, levelmb_lpratio_attachment,
       levelmb_minrelease_attachment, grlp_attack_attachment, grlp_release_attachment;
     SliderAttachment scope_freq_attachment;
+    SliderAttachment mod_lpf_freq_attachment, mod_gain_attachment, mod_tanh_attachment;
 
     vector<float> scope_freq_values;
 

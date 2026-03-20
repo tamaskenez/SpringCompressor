@@ -100,6 +100,7 @@ private:
           levelmb_lpratio, levelmb_minrelease;
         float_pointer grlp_enable, grlp_order, grlp_attack, grlp_release;
         float_pointer scope_mode, scope_freq;
+        float_pointer mod_enable, mod_lpf_order, mod_lpf_freq, mod_gain, mod_tanh;
     } raw_parameter_values;
 
     moodycamel::ReaderWriterQueue<AudioToUIMsg::V> audio_to_ui_queue;

@@ -13,6 +13,8 @@ SpringCompressorEditor::SpringCompressorEditor(
     , grlp_enable(apvts, "grlp_enable")
     , grlp_order(apvts, "grlp_order")
     , scope_mode(apvts, "scope_mode")
+    , mod_enable(apvts, "mod_enable")
+    , mod_lpf_order(apvts, "mod_lpf_order")
     , thresholdAttachment(apvts, "threshold", thresholdSlider)
     , ratioAttachment(apvts, "ratio", ratioSlider)
     , makeupAttachment(apvts, "makeup", makeupSlider)
@@ -28,6 +30,9 @@ SpringCompressorEditor::SpringCompressorEditor(
     , grlp_attack_attachment(apvts, "grlp_attack", grlp_attack)
     , grlp_release_attachment(apvts, "grlp_release", grlp_release)
     , scope_freq_attachment(apvts, "scope_freq", scope_freq)
+    , mod_lpf_freq_attachment(apvts, "mod_lpf_freq", mod_lpf_freq)
+    , mod_gain_attachment(apvts, "mod_gain", mod_gain)
+    , mod_tanh_attachment(apvts, "mod_tanh", mod_tanh)
 {
     auto setup_rotary = [this](juce::Slider& slider, juce::Label& label, const juce::String& text) {
         slider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
@@ -58,6 +63,9 @@ SpringCompressorEditor::SpringCompressorEditor(
     setup_hslider(levelmb_minrelease);
     setup_hslider(grlp_attack);
     setup_hslider(grlp_release);
+    setup_hslider(mod_lpf_freq);
+    setup_hslider(mod_gain);
+    setup_hslider(mod_tanh);
 
     for (auto* rb :
          {&level_method,
@@ -67,7 +75,9 @@ SpringCompressorEditor::SpringCompressorEditor(
           &levelmb_lporder,
           &grlp_enable,
           &grlp_order,
-          &scope_mode})
+          &scope_mode,
+          &mod_enable,
+          &mod_lpf_order})
         addAndMakeVisible(*rb);
 
     setup_hslider(scope_freq);
@@ -112,11 +122,16 @@ SpringCompressorEditor::SpringCompressorEditor(
     setup_label(grlp_release_label, "grlp_release");
     setup_label(scope_mode_label, "scope_mode");
     setup_label(scope_freq_label, "scope_freq");
+    setup_label(mod_enable_label, "mod_enable");
+    setup_label(mod_lpf_order_label, "mod_lpf_order");
+    setup_label(mod_lpf_freq_label, "mod_lpf_freq");
+    setup_label(mod_gain_label, "mod_gain");
+    setup_label(mod_tanh_label, "mod_tanh");
 
     addAndMakeVisible(transfer_curve_component);
     addAndMakeVisible(scope);
 
-    setSize(1000, 20 + 120 + 18 * 28);
+    setSize(1000, 20 + 120 + 23 * 28);
 
     draw_scope_grid(0, 100, 0, 2, false);
 }
@@ -172,6 +187,11 @@ void SpringCompressorEditor::resized()
     layout(grlp_release_label, grlp_release);
     layout(scope_mode_label, scope_mode);
     layout(scope_freq_label, scope_freq);
+    layout(mod_enable_label, mod_enable);
+    layout(mod_lpf_order_label, mod_lpf_order);
+    layout(mod_lpf_freq_label, mod_lpf_freq);
+    layout(mod_gain_label, mod_gain);
+    layout(mod_tanh_label, mod_tanh);
 }
 
 void SpringCompressorEditor::draw_scope_grid(float min_x, float max_x, float min_y, float max_y, bool log_x)

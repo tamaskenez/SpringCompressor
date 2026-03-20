@@ -60,7 +60,12 @@ SpringCompressorProcessor::SpringCompressorProcessor()
         .grlp_attack = apvts.getRawParameterValue("grlp_attack"),
         .grlp_release = apvts.getRawParameterValue("grlp_release"),
         .scope_mode = apvts.getRawParameterValue("scope_mode"),
-        .scope_freq = apvts.getRawParameterValue("scope_freq")
+        .scope_freq = apvts.getRawParameterValue("scope_freq"),
+        .mod_enable = apvts.getRawParameterValue("mod_enable"),
+        .mod_lpf_order = apvts.getRawParameterValue("mod_lpf_order"),
+        .mod_lpf_freq = apvts.getRawParameterValue("mod_lpf_freq"),
+        .mod_gain = apvts.getRawParameterValue("mod_gain"),
+        .mod_tanh = apvts.getRawParameterValue("mod_tanh")
     }
     , rms_matrix(square(k_rms_matrix_size), INT_MIN)
     , rms_matrix_as_mdspan(rms_matrix.data(), k_rms_matrix_size, k_rms_matrix_size)
@@ -94,7 +99,12 @@ SpringCompressorProcessor::SpringCompressorProcessor()
                      "grlp_attack",
                      "grlp_release",
                      "scope_mode",
-                     "scope_freq"})
+                     "scope_freq",
+                     "mod_enable",
+                     "mod_lpf_order",
+                     "mod_lpf_freq",
+                     "mod_gain",
+                     "mod_tanh"})
         apvts.addParameterListener(id, this);
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
 }
@@ -190,6 +200,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
     params.push_back(
       std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"scope_freq", 1}, "scope_freq", 0.0f, 1.0f, 0.0f)
     );
+
+    make_choice("mod_enable", {"off", "on"});
+    make_choice("mod_lpf_order", {"1", "2"});
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"mod_lpf_freq", 1},
+        "mod_lpf_freq",
+        juce::NormalisableRange<float>(20.0f, 1000.0f, 1.0f),
+        1000.0f
+      )
+    );
+    params.push_back(
+      std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{"mod_gain", 1}, "mod_gain", juce::NormalisableRange<float>(-3.0f, 3.0f, 0.01f), 0.0f
+      )
+    );
+    make_skewed_float("mod_tanh", 0.1f, 10.f, 0.01f, 1.f, 1.f);
 
     return {params.begin(), params.end()};
 }
