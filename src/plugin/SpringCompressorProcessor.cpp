@@ -277,10 +277,18 @@ EnginePars SpringCompressorProcessor::query_raw_parameter_values_into_EnginePars
                           .reference_level_db = p.reference_level_db->load(),
                           },
       .gr_filter_mode = static_cast<EnginePars::GRFilterMode>(iround<int>(p.grlp_enable->load())),
-      .gr_filter = {
+      .gr_filter =
+        {
                           .order = order(p.grlp_order),
                           .attack_time_sec = attack_sec(p.grlp_attack),
                           .release_time_sec = ms_to_sec(p.grlp_release->load()),
+                          },
+      .mod = {
+                          .enable = iround<int>(p.mod_enable->load()) == 1,
+                          .tanh_k = p.mod_tanh->load(),
+                          .gain = p.mod_gain->load(),
+                          .lpf_order = order(p.mod_lpf_order),
+                          .lpf_freq_hz = p.mod_lpf_freq->load(),
                           },
     };
 }
