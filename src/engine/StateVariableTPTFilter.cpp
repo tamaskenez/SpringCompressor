@@ -3,12 +3,6 @@
 #include <meadow/math.h>
 
 template<class IOFloat>
-StateVariableTPTFilter<IOFloat>::StateVariableTPTFilter()
-{
-    update();
-}
-
-template<class IOFloat>
 void StateVariableTPTFilter<IOFloat>::set_type(Type type)
 {
     filter_type = type;
@@ -46,14 +40,17 @@ void StateVariableTPTFilter<IOFloat>::reset(double state)
 template<class IOFloat>
 void StateVariableTPTFilter<IOFloat>::update()
 {
-    g = std::tan(num::pi * cutoff_freq / sample_rate);
-    R2 = 1.0 / resonance;
-    h = 1.0 / (1.0 + R2 * g + g * g);
+    if (!std::isnan(sample_rate)) {
+        g = std::tan(num::pi * cutoff_freq / sample_rate);
+        R2 = 1.0 / resonance;
+        h = 1.0 / (1.0 + R2 * g + g * g);
+    }
 }
 
 template<class IOFloat>
 void StateVariableTPTFilter<IOFloat>::process(std::span<IOFloat> samples)
 {
+    assert(!std::isnan(sample_rate));
     array<double, 3> lbh;
     double& yLP = lbh[0];
     double& yBP = lbh[1];
@@ -67,6 +64,21 @@ void StateVariableTPTFilter<IOFloat>::process(std::span<IOFloat> samples)
         s2 = 2.0 * yLP - s2;
         x = ffcast<IOFloat>(lbh[std::to_underlying(filter_type)]);
     }
+}
+
+template<class IOFloat>
+void StateVariableTPTFilter<IOFloat>::set_lowpass_3db_cutoff_freq_hz_Q(double freq_hz, double Q)
+{
+    filter_type = Type::lowpass;
+    // The SVF natural frequency ω₀ ≠ the -3 dB frequency for non-Butterworth Q.
+    // For H_LP(s) = 1/(s²+s/Q+1), the -3 dB point satisfies:
+    //   (1-ω²)² + ω²/Q² = 2  →  ω² = [(2 - 1/Q²) + √((2 - 1/Q²)² + 4)] / 2
+    // We invert this to find f0 such that -3 dB lands at freq_hz.
+    const double a = 2.0 - 1.0 / (Q * Q);
+    const double omega_ratio = std::sqrt((a + std::sqrt(a * a + 4.0)) / 2.0);
+    cutoff_freq = freq_hz / omega_ratio;
+    resonance = Q;
+    update();
 }
 
 template class StateVariableTPTFilter<float>;

@@ -3,6 +3,7 @@
 #include "SpringLowPass.h"
 
 #include "Biquad_TD2.h"
+#include "StateVariableTPTFilter.h"
 #include "engine_util.h"
 #include "meadow/cppext.h"
 
@@ -104,21 +105,25 @@ TEST(SpringLowPass, compare_to_2nd_orders_lpf)
     auto b2_coeffs = matlab::butter(2, matlab::FilterType::LowPass{f_hps});
     auto critdamp = Biquad_TDF2(critdamp_coeffs);
     auto b2 = Biquad_TDF2(b2_coeffs);
+    auto tpt = StateVariableTPTFilter<double>();
+    tpt.set_lowpass_3db_cutoff_freq_hz_Q(f_hz, 0.5);
+    tpt.prepare_to_play(fs);
 
     const unsigned N = iround<unsigned>(fs);
-    std::vector<double> slp_out;
-    std::vector<double> critdamp_out;
-    std::vector<double> b2_out;
+    std::vector<double> slp_out, critdamp_out, b2_out, tpt_out;
     for (unsigned i = 0; i < N; ++i) {
         const double s = i == 0 ? 1.0 : 0.0;
         slp_out.push_back(slp.process(s));
         critdamp_out.push_back(critdamp.process(s));
         b2_out.push_back(b2.process(s));
+        double x = s;
+        tpt.process(span(&x, 1));
+        tpt_out.push_back(x);
     }
     FILE* f = fopen("/tmp/slp_critdamp_b2.m", "w");
     std::println(f, "A = [");
     for (unsigned i = 0; i < N; ++i) {
-        std::println(f, " {} {} {}", slp_out[i], critdamp_out[i], b2_out[i]);
+        std::println(f, " {} {} {} {}", slp_out[i], critdamp_out[i], b2_out[i], tpt_out[i]);
     }
     std::println(f, "];");
 }
