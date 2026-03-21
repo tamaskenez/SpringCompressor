@@ -17,7 +17,7 @@ void StateVariableTPTFilter<IOFloat>::set_type(Type type)
 template<class IOFloat>
 void StateVariableTPTFilter<IOFloat>::set_cutoff_freq(double freq_hz)
 {
-    cutoffFrequency = freq_hz;
+    cutoff_freq = freq_hz;
     update();
 }
 
@@ -46,7 +46,7 @@ void StateVariableTPTFilter<IOFloat>::reset(double state)
 template<class IOFloat>
 void StateVariableTPTFilter<IOFloat>::update()
 {
-    g = std::tan(num::pi * cutoffFrequency / sample_rate);
+    g = std::tan(num::pi * cutoff_freq / sample_rate);
     R2 = 1.0 / resonance;
     h = 1.0 / (1.0 + R2 * g + g * g);
 }
@@ -54,24 +54,18 @@ void StateVariableTPTFilter<IOFloat>::update()
 template<class IOFloat>
 void StateVariableTPTFilter<IOFloat>::process(std::span<IOFloat> samples)
 {
+    array<double, 3> lbh;
+    double& yLP = lbh[0];
+    double& yBP = lbh[1];
+    double& yHP = lbh[2];
     for (auto& x : samples) {
         const double xd = ffcast<double>(x);
-        const double yHP = h * (xd - (R2 + g) * s1 - s2);
-        const double yBP = g * yHP + s1;
+        yHP = h * (xd - (R2 + g) * s1 - s2);
+        yBP = g * yHP + s1;
         s1 = 2.0 * yBP - s1;
-        const double yLP = g * yBP + s2;
+        yLP = g * yBP + s2;
         s2 = 2.0 * yLP - s2;
-        switch (filter_type) {
-        case Type::lowpass:
-            x = ffcast<IOFloat>(yLP);
-            break;
-        case Type::bandpass:
-            x = ffcast<IOFloat>(yBP);
-            break;
-        case Type::highpass:
-            x = ffcast<IOFloat>(yHP);
-            break;
-        }
+        x = ffcast<IOFloat>(lbh[std::to_underlying(filter_type)]);
     }
 }
 

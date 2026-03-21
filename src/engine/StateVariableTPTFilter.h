@@ -4,7 +4,7 @@ template<class IOFloat>
 class StateVariableTPTFilter
 {
 public:
-    enum class Type {
+    enum class Type : unsigned {
         lowpass,
         bandpass,
         highpass
@@ -27,8 +27,9 @@ private:
 
     double g, h, R2;
     double s1 = 0, s2 = 0;
-    double sample_rate = 44100.0;
     Type filter_type = Type::lowpass;
-    double cutoffFrequency = 1000.0;
+
+    double sample_rate = 44100.0;
+    double cutoff_freq = 1000.0;
     double resonance = 1.0 / std::sqrt(2.0);
 };
