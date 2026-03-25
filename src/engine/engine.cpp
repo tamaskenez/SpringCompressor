@@ -269,19 +269,19 @@ struct EngineImpl : public Engine {
                 break;
             }
             // At this point, we have a filter sample^2 like signal in sidechain_buf.
-            const double k_small_power = matlab::db2pow(-50.0);
+            //const double k_small_power = matlab::db2pow(-70.0);
             for (unsigned i = 0; i < sucast(num_samples); ++i) {
                 auto& s = sidechain_buf[i];
                 s = std::max(s, 0.0);
                 // Normalize.
-                if (s < k_small_power) {
-                    s = (s / square(k_small_power)) * (square(input_sidechain_buf[i]) - s);
-                } else {
+                //if (s < k_small_power) {
+                //    s = (s / square(k_small_power)) * (square(input_sidechain_buf[i]) - s);
+                //} else {
                     s = (square(input_sidechain_buf[i]) - s) / s;
-                }
-                s = tanh(s * pars.mod.tanh_k) / pars.mod.tanh_k;
+                //}
+                s = tanh(s * pars.mod.tanh_k);
                 if (std::isnan(s)) {
-                    assert(false);
+                  //  assert(false);
                     s = 0;
                 }
             }
