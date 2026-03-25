@@ -12,6 +12,7 @@
 
 double exponential_moving_average_filter_coeff_from_cutoff_freq(double freq_hps)
 {
+    assert(in_oo_range(freq_hps, 0, 1));
     // The usual exp(-num::pi * freq_hps) formula gives the same result for
     // lower frequencies but not exact at higher ones.
     const auto c = cos(num::pi * freq_hps);
@@ -89,6 +90,7 @@ AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span
 
 matlab::TransferFunctionCoeffs critically_damped_second_order_lowpass(double freq_hps)
 {
+    assert(in_oo_range(freq_hps, 0, 1));
     const double wc = 2 * num::pi * freq_hps;
     const double wn = wc / sqrt(num::sqrt2 - 1); // This line provides normalizing to -3 dB instead of -6 dB
     const std::array<double, 1> b = {square(wn)};

@@ -9,7 +9,7 @@
 
 namespace
 {
-constexpr double k_semitones_per_test_freq = 6.0;
+constexpr double k_semitones_per_test_freq = 2.0;
 constexpr int k_dbs_per_test_level = 1;
 constexpr double k_lowest_test_freq = 40.0;
 constexpr double k_highest_test_freq = 12000;
@@ -312,6 +312,7 @@ ScopeData generate_scope_data(EnginePars pars, int64_t request_id, std::atomic<i
     // Clear makeup gain.
     pars.transfer_curve.makeup_gain_db = 0;
     pars.transfer_curve.reference_level_db = -INFINITY;
+    pars.mod.enable = false;
 
     // Create test frequencies.
     const int highest_freq_T = std::max(2, iceil<int>(k_sample_rate / k_highest_test_freq));

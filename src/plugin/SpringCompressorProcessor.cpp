@@ -181,7 +181,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
     make_choice("levellpf_mode", {"amp", "rms"});
     make_choice("levellpf_order", {"1", "2"});
     make_skewed_float("levellpf_attack", 0.f, 50.f, 0.1f, 10.f, 10.f);
-    make_skewed_float("levellpf_release", 0.f, 2000.f, 1.f, 100.f, 100.f);
+    make_skewed_float("levellpf_release", 1.f, 2000.f, 1.f, 500.f, 100.f);
 
     make_skewed_float("levelmb_freqlo", 20.f, 1000.f, 1.f, 100.f, 100.f);
     make_skewed_float("levelmb_freqhi", 1000.f, 12000.f, 1.f, 3000.f, 3000.f);
@@ -194,7 +194,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpringCompressorProcessor::c
     make_choice("grlp_enable", {"off", "mag", "pow", "db"});
     make_choice("grlp_order", {"1", "2"});
     make_skewed_float("grlp_attack", 0.f, 50.f, 0.1f, 10.f, 10.f);
-    make_skewed_float("grlp_release", 0.f, 2000.f, 1.f, 100.f, 100.f);
+    make_skewed_float("grlp_release", 1.0f, 2000.f, 1.f, 500.f, 100.f);
 
     make_choice("scope_mode", {"transfer", "attack", "release", "hdist", "inhdist", "threshold"});
     params.push_back(

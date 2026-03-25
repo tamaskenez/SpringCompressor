@@ -36,6 +36,21 @@ This experiment hints at that if we need the cleanest spectrum, the gain-reducti
 
 On the other hand, certain sources suggest that the usual and best sounding location to filter the GR signal is the dB domain.
 
+Another experiment:
+
+Input: artificial envelope (1 + sine).^2, because interference ripples (sin(f0) + sin(2 f0)) show up as
+sine modulated power of analytic signal. Simulated the compression process (filtering + transfer curve)
+Evaluated the spectrum of the final gr (mag) signal.
+
+Tested all combinations of mag/pow/db filtering pre and post transfer curve. Result:
+
+For db filtering it doesn't matter if post or pre.
+Best result: tc then power filtering.
+The first harmonic only minimally affected (1.5 dB lower when best)
+When prefiltering, from worst to best: pow, mag, db
+When postfiltering, from worst to best: db, mag, pow
+
+
 # Compressor dB transfer curve, soft knee formula
 
 The gradual, even increase of the ratio is exponential R * exp(d). The derivative on transitional region of the knee must increase in an exp(dx) manner.
@@ -67,208 +82,169 @@ The lower the attack the slower the harmonics envelope decay (more higher order 
 Increasing the release lowers the harmonics envelope.
 The auto release gives somewhat more harmonics.
 
-## UNUSED CODE
+## Hilbert experiments:
 
-#if 0
-template<size_t D>
-class FixedPoint
-{
-public:
-    explicit FixedPoint(double f_arg)
-        : i(round(f_arg * pow(10.0, D)))
-    {
-    }
-    explicit FixedPoint(float f_arg)
-        : FixedPoint(ffcast<double>(f_arg))
-    {
-    }
-    [[nodiscard]] double get_double() const
-    {
-        return i / pow(10.0, D);
-    }
-    [[nodiscard]] float get_float() const
-    {
-        return ffcast<float>(get_double());
-    }
-    template<size_t YD>
-    bool operator==(const FixedPoint<M>& y) const
-    {
-        if constexpr (D >= YD) {
-            return i == y.i * iround<int64_t>(pow(10.0, D - YD));
-        } else {
-            return i * iround<int64_t>(pow(10.0, YD - D)) == y.i;
-        }
-    }
+Hilbert-RMS is infinitely better for pure sine. Two sinusoids f apart produces a ripple at f Hz in x.^2
+both with and without Hilbert. It means, interference between 1000 and 1100 Hz can't be filtered out with high-pass
+at 500 Hz. To control harmonic distortion with RMS metering, without excessive envelope filtering but sensitivity
+to attack, asymmetric envelope filtering seems to be unavoidable.
 
-private:
-    int64_t i = 0;
-};
-#endif
+## Trying to find a smooth but attack-sensitive envelope
 
-#if 0
-// TODO: Remove, superseded by RecursiveCrossoverRMSDetector
-struct FilterBankRmsDetectorConfig {
-    struct FilterBank {
-        int half_order;
-        double freq_lo_hz;
-        double freq_hi_hz;
-        double filters_per_octave;
-        double Q;
-    } filter_bank;
-    struct LPF {
-        int order;
-        double K;
-        optional<double> attack_time_constant; // When it's set, order is ignored, SpringLowPass will be used.
-    } lpf;
-};
+Working with critically damped TPT filters with attack and release set of coeffs.
 
-class FilterBankRmsDetector
-{
-public:
-    FilterBankRmsDetector(double fs, const FilterBankRmsDetectorConfig& config_arg);
-    void process(span<double> samples);
+Setup:
 
-private:
-    FilterBankRmsDetectorConfig config;
-    FilterBankBandPass2 fb;
-    struct LP {
-        std::vector<FirstOrderIIR_TDF2> first;
-        std::vector<Biquad_TDF2> second;
-        std::vector<SpringLowPass> spring;
-    } lp;
-    vector<double> filter_bank_output_samples;
-};
-#endif
+Feed 2 filters with squared samples. One filter produces upper bound, other lower bound. On each sample we try both
+filters with attack and release coeffs. Upper bound filter always goes whichever produces the higher samples, lower
+bound is whichever the lower sample.
 
-#if 0
-// TODO: Remove, superseded by RecursiveCrossoverRMSDetector
+The mean of the two filters is a good guess already, but too much ripple.
 
-FilterBankRmsDetector::FilterBankRmsDetector(double fs, const FilterBankRmsDetectorConfig& config_arg)
-    : config(config_arg)
-    , fb(
-        config.filter_bank.freq_lo_hz / fs * 2,
-        config.filter_bank.freq_hi_hz / fs * 2,
-        config.filter_bank.filters_per_octave,
-        config.filter_bank.Q
-      )
-    , filter_bank_output_samples(fb.num_filters())
-{
-    if (auto attack_time_constant = config.lpf.attack_time_constant) {
-        lp.spring.reserve(fb.num_filters());
-        for (unsigned j = 0; j < fb.num_filters(); ++j) {
-            lp.spring.emplace_back(fs);
-            const auto fc_hz = fb.center_freq(j) / 2 * fs;
-            const auto tau_sec = 1 / (2 * num::pi * fc_hz);
-            lp.spring.back().set_critically_damped_with_time_constant(*attack_time_constant, tau_sec * config.lpf.K);
-        }
-    } else {
-        switch (config.lpf.order) {
-        case 1:
-            lp.first.reserve(fb.num_filters());
-            for (unsigned j = 0; j < fb.num_filters(); ++j) {
-                const auto fc = fb.center_freq(j);
-                lp.first.emplace_back(matlab::butter(1, matlab::FilterType::LowPass{fc / config.lpf.K}));
-            }
-            break;
-        case 2:
-            lp.second.reserve(fb.num_filters());
-            for (unsigned j = 0; j < fb.num_filters(); ++j) {
-                const auto fc = fb.center_freq(j);
-                lp.second.emplace_back(matlab::butter(2, matlab::FilterType::LowPass{fc / config.lpf.K}));
-            }
-            break;
-        default:
-            assert(false);
-        }
-    }
-}
+TODO1: Introduce a third filter.
 
-void FilterBankRmsDetector::process(span<double> samples)
-{
-    const auto NF = fb.num_filters();
-    for (auto& s : samples) {
-        fb.process(s, filter_bank_output_samples);
-        double sample_power = 0;
-        if (lp.first.empty()) {
-            assert(lp.first.size() == NF);
-            for (unsigned j = 0; j < NF; ++j) {
-                sample_power += lp.first[j].process(square(filter_bank_output_samples[j]));
-            }
-        } else if (!lp.second.empty()) {
-            assert(lp.second.size() == NF);
-            for (unsigned j = 0; j < NF; ++j) {
-                sample_power += lp.second[j].process(square(filter_bank_output_samples[j]));
-            }
-        } else {
-            assert(lp.spring.size() == NF);
-            for (unsigned j = 0; j < NF; ++j) {
-                sample_power += lp.spring[j].process(square(filter_bank_output_samples[j]));
-            }
-        }
-        s = std::sqrt(sample_power);
-    }
-}
-#endif
+Option 1: feed the filter with the mean. Try both coeffs, choose the one which produces higher. Or choose attack if mean
+above previous value (probably it's about the same)
+
+Option 2: if the mean is higher, feed it with mean and attack coeffs. Otherwise, feed with input and release coeffs.
+
+Option 3: Feed the filter with input. Use attack if mean is higher, release otherwise. DONT THINK IT'S GOOD
+
+We like to get the release filtered input but pull up when attack.
+
+TODO2: do some tests with multiband RMS detection, doesn't it suppress some ripple.
+
+TODO3: test the GR signal of other compressors (might not be easy in case of non-linear phase.
+
+## Summary report
+
+I've been experimenting with audio dynamic range compressor algorithms. The solution I'm looking for is a compressor which performs its duty, to compress the dynamic range of the input as cleanly and transparently as possible, with the least amount of coloring.
+I'd like to combine basic, simple building blocks, without complicated, special solutions to handle corner cases and without emulating existing hardware or software solutions.
+I'd like to believe that there are objective, measurable goals which characterize the ideal compression I'm aiming for, and these are:
+
+1. Accurately following the level transfer curve set by the user (threshold, ratio)
+2. Keeping or suppressing the transients as dictated by the attack control
+3. Keeping the harmonic distortion as low as possible
+
+Let me elaborate on these:
+
+1. Accurately following the level transfer curve set by the user (threshold, ratio)
+
+By accurately following I mean that for a steady sine wave the input and output RMS values must follow the formula `out_db = (in_db - threshold_db) / ratio + threshold_db`
+To achieve this we need an accurate RMS measurement. To be as musical sounding and transparent as possible the idea is to rely on RMS envelope instead of peak envelope.
+
+2. Keeping or suppressing the transients as dictated by the attack control
+
+For lower settings of the attack control we want to attenuate transients by applying the transfer curve sooner when the input signal's amplitude is increasing quickly.
+For higher settings of the attack control we want to let transients through and start applying the transfer curve later, gradually.
+
+Unlike traditional compressors we are not primarily interested in providing a release control. The reason is that the user wants to control the smearing of transients, they don't actually need a release control. The release control and the asymmetric setup of the gain control logic (short attach/long release) is there just as a workaround, to provide shorter attack times without excessive audio frequency content appearing on the gain reduction signal which translates into harmonic distortion on the output. The release control just a fix to compensate a side-effect of the compressor and does not express intent of the user.
+
+So, ideally, in my compressor I'd like to provide an attack control and a harmonic distortion suppression control which automatically selects the lowest level of release which provides the selected level of harmonic distortion suppression.
+
+3. Keeping the harmonic distortion as low as possible
+
+The harmonic distortion arises from audio frequencies appearing in the gain reduction signal which we use to modulate the input signal with.
+We have contradicting requirements: we want the gain reduction signal as smooth as possible but we want to follow the input signal's envelope as closely as required by the attack control. The difficulty is to separate the input signal's envelope (RMS) from these two other effects which are not part of the envelope:
+
+- The natural vibration of the sound wave at its frequency: The real (non-imaginary) audio signal alternates between its negative and positive amplitudes. Since the RMS detector works by low-pass filtering the squared input signal, the natural vibration of the wave shows up as double frequency sine wave on top of the signal's power as DC component. This double frequency component needs to be filtered out by the low-pass filter in order to not be mistaken for the envelope.
+- Interference between different frequency components: Two sine waves with frequencies f1 and f2 produce and amplitude modulation with difference frequency.
+
+So, the difficulty is that the quickly raising amplitude of a transient (which is part of the envelope) moves as fast or faster than the latter two non-envelope related effects.
+I had two ideas to overcome this problem:
+
+1. Split the input signal with a filter bank and detect signal power separately for different bands. Use low-pass filters with time constants tuned to the bands frequencies. This way we can use slow low-pass filters for bass frequencies and fast ones for higher frequencies
+2. Use Hilbert transform to compute the analytical signal and measure RMS there. For a pure sine wave the analytical signal's amplitude is constant, it is not alternating, even with zero filtering the RMS reading is perfect.
+
+I made some experiments and this is what I've found:
+
+The filter bank does not solve the interference problem. Two signal components at 1000 Hz and 1100 Hz will create a ripple in the RMS signal at 100 Hz which will not be suppressed by the low-pass filter tuned to 1000 Hz signals.
+The filter bank does solve the problem of suppressing the double frequency ripple appearing in the RMS signal. However, that is already solved by the Hilbert/analytical method.
+
+That's why my conclusion is that we probably don't need a filter bank. Unless we can afford having quicker low-pass filters for RMS detection for higher frequencies because we think those regions are less probably to contain high-energy, low-frequency interferences. I'm not sure if that's true.
+
+My current design idea is the following architecture:
+
+- Measure the RMS of the input signal by computing the analytical signal with Hilbert transform, taking the norm of the complex valued samples (squared absolute value) and feeding it into a low-pass filter which is tuned according to the attack control. It should keep the transients which we need to preserve for the current setting.
+- Then, apply a second low-pass filtering. This time it's asymmetric: on raising edges immediately take the input value, on falling edges apply the amount of low-pass filtering which required for the harmonic distortion target.
+- Then, apply the transfer curve.
+- Then, apply a third, light, low-pass filtering to smooth out any abrupt changes the transfer curve might have introduced.
+
+Please let me know how you evaluate my design and ideas and provide insights if you have any.
+Also I'd be interested to know if there's anything I can learn from historical, existing compressor architectures and incorporate it into my design.
 
 
-AnalysePeriodicSignalHarmonicsResult analyse_periodic_signal_harmonics(std::span<const double> signal, int num_periods)
-{
-    const int N = iicast<int>(signal.size());
-    assert(N > 0 && num_periods > 0 && num_periods < N);
-    const double N_d = ifcast<double>(N);
+## Design Guidelines
 
-    // Compute |X[k]|² for a single DFT bin k using argument reduction.
-    // X[k] = sum_n x[n] * exp(-2πi*k*n/N)
-    // (k*n) mod N is computed exactly in integer arithmetic, keeping the trig argument
-    // in [0, 2π] regardless of n, which avoids large-argument precision loss entirely.
-    const double two_pi_over_N = 2.0 * num::pi / N_d;
-    auto dft_bin_power = [&](int k) -> double {
-        double re = 0, im = 0;
-        for (int n = 0; n < N; ++n) {
-            const auto kn_mod_N = ifcast<double>(k * n % N);
-            const double angle = -two_pi_over_N * kn_mod_N;
-            re += signal[sucast(n)] * cos(angle);
-            im += signal[sucast(n)] * sin(angle);
-        }
-        return re * re + im * im;
-    };
+- Correct by design, as opposed to fix problems by tuning
+- Verified by objective measurements
+- Small number of "moving parts", simple architecture
+- No analog emulation - let's enjoy the feature where digital is better
+- Maximum effort to avoid digital artifacts
+- The less controls the better
 
-    // Spectral symmetry factors for a real signal:
-    //   DC (k=0):           reported = parseval = 1.0  — single bin, no mirror
-    //   0 < k < N/2:        reported = parseval = 2.0  — conjugate-mirror pair ±k
-    //   Nyquist (k=N/2):    parseval = 1.0 (discrete-time truth)
-    //                       reported = 0.5 (-Nyquist aliases onto +Nyquist, doubling
-    //                                  X[N/2]; halving recovers the continuous-time A²/2)
-    const bool has_nyquist_bin = is_even(N);
-    auto parseval_factor = [&](int k) -> double {
-        return (k == 0 || (has_nyquist_bin && k == N / 2)) ? 1.0 : 2.0;
-    };
-    auto reported_factor = [&](int k) -> double {
-        return (has_nyquist_bin && k == N / 2) ? 0.5 : parseval_factor(k);
-    };
+## Concrete, compressor-specific design decisions
 
-    // Partition all bins [0..N/2] into DC, fundamental, harmonics, and rest.
-    // rest_power is accumulated as a direct sum of non-special bin powers rather than
-    // computed as (total − f0 − …), which would suffer catastrophic cancellation when
-    // most energy is in the fundamental.
-    double dc_power = 0, f0_power = 0, harmonics_power = 0, rest_power = 0;
-    for (int k = 0; k <= N / 2; k++) {
-        const double bp = dft_bin_power(k) / (N_d * N_d);
-        if (k == 0) {
-            dc_power = parseval_factor(0) * bp;
-        } else if (k == num_periods) {
-            f0_power = reported_factor(k) * bp;
-        } else if (k % num_periods == 0) {
-            harmonics_power += reported_factor(k) * bp;
-        } else {
-            rest_power += parseval_factor(k) * bp;
-        }
-    }
+- High-quality, transparent oversampling
+- Minimize harmonic distortion, inherent and sometimes preferred in traditional compressor architectures
+- Attack times controlled by peak detection is a compromise to allow fast reaction times without
+  introducing excessive harmonic distortion. This compressor uses a cleaner design, a frequency dependent
+  RMS detection which allows very short attack/release times without harmonic distortion.
+- As smooth as possible (exponential) soft knee
 
-    return AnalysePeriodicSignalHarmonicsResult{
-      .dc_db = matlab::pow2db(dc_power),
-      .f0_db = matlab::pow2db(f0_power),
-      .harmonics_db = matlab::pow2db(harmonics_power),
-      .rest_db = matlab::pow2db(rest_power)
-    };
-}
+## Research directions
+
+- Check if hilbert RMS detector has any benefits
+- Check if wideband RMS detectors combined with `max` is good
+- Get a very problematic test material, strong bass content, transients, stops.
+
+## Features missing
+
+- Side chain HP filter
+- Side chain K-weighting
+- Multichannel input sum/max slider
+- Push-to-auto-makeup button
+- Maybe more intuitive soft knee slider (set the threshold and knee top and ratio on single 2D control)
+- GR indicator
+- Parallel compression (by adjusting the gain)
+- Knee control 0..100% instead of db (threshold to (100-percent)/100 * (-threshold))
+
+## Measurements:
+
+- Harmonic distortion by frequency
+- Aliasing distortion by frequency
+- Comparisons with Kotelnikov
+
+
+### State variable TPT recalculation
+
+
+What happens when a state var tpt is fed with alpha * i:
+
+
+The original equations, merged together:
+
+        s1n = 2 * g * h * xi + (1 - 2 * g * h * (R2 + g)) * s1p - 2 * g * h * s2p;
+        yLP = g^2 * h * xi + (g - g^2 * h * (R2 + g)) * s1p + (1 - g^2 * h) * s2p;
+        s2n = 2 * g^2 * h * xi + (2 * g - 2 * g^2 * h * (R2 + g)) * s1p + (1 - 2 * g^2 * h) * s2p;
+        y(i) = yLP;
+
+Assuming that s1 doesn't change because it tracks the slope (D)
+
+Given xi and D, this should be the steady state (after feeding xi)
+
+s1 = D / (2 * g);
+s2n = xi + (g - R2) * D / (2 * g);
+
+Given s1 and s2 after an update we can find the last xi and D
+
+xi = s2 - (g - R2) * s1;
+D = s1 * (2 * g);
+
+Therefore, when we change coefficients, we need to
+- Find xi and D from s1 and s2
+- Update the coefficients
+- Update s1 and s2 from xi and D
+
+TODO 1: try the difference with a sweep with and without the state update
+TODO 2: implement the state update in qf
