@@ -32,7 +32,7 @@ mags = sqrt(pws);
 plot(frs, mags), grid;
 
 % Construct a full tree filter bank
-fs = 48000;
+fs = 44100;
 f0 = 12000;
 frs = f0;
 per_octave = 1;

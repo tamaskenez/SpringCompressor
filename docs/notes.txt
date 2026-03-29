@@ -216,35 +216,150 @@ Also I'd be interested to know if there's anything I can learn from historical, 
 - Comparisons with Kotelnikov
 
 
-### State variable TPT recalculation
-
-
-What happens when a state var tpt is fed with alpha * i:
-
+### State variable TPT state update after coefficient change.
 
 The original equations, merged together:
 
-        s1n = 2 * g * h * xi + (1 - 2 * g * h * (R2 + g)) * s1p - 2 * g * h * s2p;
-        yLP = g^2 * h * xi + (g - g^2 * h * (R2 + g)) * s1p + (1 - g^2 * h) * s2p;
-        s2n = 2 * g^2 * h * xi + (2 * g - 2 * g^2 * h * (R2 + g)) * s1p + (1 - 2 * g^2 * h) * s2p;
-        y(i) = yLP;
+    s1n = 2 * g * h * xi + (1 - 2 * g * h * (R2 + g)) * s1p - 2 * g * h * s2p;
+    yLP = g^2 * h * xi + (g - g^2 * h * (R2 + g)) * s1p + (1 - g^2 * h) * s2p;
+    s2n = 2 * g^2 * h * xi + (2 * g - 2 * g^2 * h * (R2 + g)) * s1p + (1 - 2 * g^2 * h) * s2p;
+    y(i) = yLP;
 
-Assuming that s1 doesn't change because it tracks the slope (D)
+Problem:
 
-Given xi and D, this should be the steady state (after feeding xi)
+- s1 tracks the slope of the input, but the encoding depends on the g coefficient.
+- s2 tracks the DC of the input but the encoding depends on s1 and R2 (or g and R2).
+
+State update methods assume a steady ramp (x[i] = C + D * i). In this case the state variables converge to this:
+
+    s1 = D / (2 * g);
+    s2[i] = x[i] + (g - R2) * D / (2 * g) = x[i] + (g - R2) * s1
+
+In this ase
+
+We try to make the transition as smooth as possible.
+
+Method 1: not updating the state variable.
+
+Result after changing the coefficients:
+    s1 gradually changes to its new value which encodes the same slope.
+    yLP (and s2) discontinuity for 2 samples.
+
+Method 2: updating the state variable to its new steady values:
+
+Result after changing the coefficients:
+    s1 and s2 stays steady
+    yLP (and s2) discontinuity for 1 sample
+This method is the best for BP and HP outputs. For LP output, if the application allows, we can add a new offset
+to yLP after each change. This might not be suitable when the filter needs to track DC.
+
+Method 3: s1 unchanged, update s2 such that xi would have resulted in the same yLP.
+Result: Compared to not updating:
+    s1 similar
+    yLP (and s2), instead of the 2 sample jump, the first sample continues the previous ramp and a double jump on the second
+    So, it's worse than not updating.
+
+Method 4: s1 to steady, s2 stays the same.
+Result:
+    s1 quickly changes to another, intermediate value (between the old and new steady) then gradually changes
+        to the new steady.
+    yLP (and s2) no serious discontinuity but there is a back-and-forth transient before it settles on steady.
+    best for LP output.
+
+Equations for updates:
 
 s1 = D / (2 * g);
+s2n = yLP + D / 2;
 s2n = xi + (g - R2) * D / (2 * g);
 
-Given s1 and s2 after an update we can find the last xi and D
-
+yLP = s2n - g * s1;
+D = 2 * g * s1;
 xi = s2 - (g - R2) * s1;
-D = s1 * (2 * g);
 
-Therefore, when we change coefficients, we need to
-- Find xi and D from s1 and s2
-- Update the coefficients
-- Update s1 and s2 from xi and D
+## Experiments about catching peaks above primary RMS detector
 
-TODO 1: try the difference with a sweep with and without the state update
-TODO 2: implement the state update in qf
+- tracking peaks and throughs of quicker LPF, taking mean
+- finding the optimal peak/through tracker. Try
+  - order 1/2 LPF for LPF and peak/through tracker
+  - try tuning the peak/through tracker to different freqs relative to LPF.
+
+PEAK/THROUGH TRACKER: doesn't seem to work, it can always be replaced by another LPF with a lower frequency.
+
+- set of multiple LPFs, maybe tuned by octaves
+  - checking the derivates, compared to each other, when they move together
+  - or, where there is an inversion (two adjacent LPF output switch places
+
+## Lossy integrator
+
+low-pass butterworth filter:
+
+[b, a] = butter(1, fc);
+b(1) == b(2), let's call it b.
+a(1) = 1, let's a = a(2).
+
+Y/X = (b + b * z^-1) /(1 + a * z^-1)
+Y (1 + a * z^-1) = X (b + b * z^-1)
+y[n] + a * y[n-1] = b * x[n] + b * x[n-1]
+y[n] = b * x[n] + b * x[n-1] - a * y[n-1]
+
+How much does y grows:
+
+    dy = y[n] - y[n-1] = b * x[n] + b * x[n-1] - a * y[n-1] - y[n-1]
+    = b * (x[n] + x[n-1]) - (a + 1) * y[n-1]
+    = 2 * b * (x[n] + x[n-1]) / 2 - (a + 1) * y[n-1]
+
+That means, that aside from the lossy term `(a + 1) * y[n-1]` and taking the sample time as unity, the
+filter integrates 2 * b * x.
+
+We need to estimate when the filter output goes to zero.
+
+    y[n] + dy/dt * DT = 0
+
+Since
+
+    y = integral(2 * b * x, dt)
+    dy/dt = 2 * b * x
+
+    y[n] + 2 * b * x[n] * DT = 0
+    DT = -y[n] / (2 * b * x[n])
+
+Test:
+
+[b, a] = butter(1, 0.001);
+fc = 0.01;
+ns = [0:1000]';
+x = sin(2 * pi * ns * fc);
+y = filter(b, a, x);
+DT = -y ./ (2 * b(1) * x);
+DT(DT < 0) = nan;
+
+R = 600:800;
+subplot(2,1,1);
+plot(ns, x, ns, y), grid, legend('x', 'y'), axis([R(1) R(end) -1 1]);
+subplot(2,1,2); plot(ns, ns + DT), grid, axis([R(1) R(end), R(1), R(end)]);
+
+
+Tracking the average value of the current peak/through:
+
+`slow` and `fast` are LPF(input.^2) with lower and higher cutoff frequencies.
+fms = fast - slow, the difference signal
+i_fms = LPF(fms), where LPF is a lossy integrator (for know I'm using the slow cutoff freq for it)
+i0 is the position of the last sign change of i_fms
+mean_i_fms = i_fms(i) / (i - y0)  is the average fms since the last sign change
+When abs(mean_i_fms) is growing it indicates that the increase or decrease of the `fast` signal is a peak or
+a through compared to the `slow` signal, as opposed to some ripple around the `slow` signal.
+
+How does the rate of change of abs(mean_i_fms) look like?
+
+    mean_i_fms(i) = i_fms(i) / (i - i0)
+    d mean_i_fms(i) = i_fms(i) / (i - i0) / di =
+
+Because (f/g)' = (f'g - fg') / g^2:
+
+    = (d i_fms(i) / di * (i - i0) - i_fms(i) * d (i - i0) / di) / (i - i0)^2
+    = (fms(i) * (i - i0) - i_fms(I)) / (i - i0)^2
+    = fms(i) / (i - i0) - i_fms(i) / (i - i0) ^2
+    = (fms(i) - mean_i_fms(i)) / (i - i0)
+
+Making it scale invariant
+    = (fms(i) - mean_i_fms(i)) / slow(i) / (i - i0)

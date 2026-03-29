@@ -20,5 +20,3 @@ function [y, s12] = filter_statevartpt2(g_h_R2, x, s12)
     end
     s12 = [s1 s2];
 end
-
-
