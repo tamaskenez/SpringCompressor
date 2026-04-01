@@ -16,6 +16,8 @@ https://ikee.lib.auth.gr/record/345494/files/Manasidis.pdf
 1176 simulation matlab simulink
 https://hajim.rochester.edu/ece/sites/zduan/teaching/ece472/projects/2016/White_Dick_paper.pdf
 
+SSL plugin test
+
 # VIDEOS
 
 The Art of Filter Design - Vadim Zavalishin

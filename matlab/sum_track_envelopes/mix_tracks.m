@@ -63,7 +63,7 @@ if nargin >= 3
     end
     M = max(max(abs(mix)));
     if M < 1, M = 1; end
-    player = audioplayer(mix, fs);
+    player = audioplayer(mix / M, fs);
     playblocking(player);
 end
 

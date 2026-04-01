@@ -1,5 +1,5 @@
-[x, fs] = audioread('AngelaThomasWade_MilkCowBlues.wav');
-x = x(1.0853e+05:1.3502e+05,1);
+%[x, fs] = audioread('AngelaThomasWade_MilkCowBlues.wav');
+%x = x(1.0853e+05:1.3502e+05,1);
 
 if false
     x = zeros(size(x));
