@@ -1,5 +1,5 @@
-%[x, fs] = audioread('AngelaThomasWade_MilkCowBlues.wav');
-%x = x(1.0853e+05:1.3502e+05,1);
+[x, fs] = audioread('AngelaThomasWade_MilkCowBlues.wav');
+x = x(1.0853e+05:1.3502e+05,1);
 
 if false
     x = zeros(size(x));
@@ -61,6 +61,7 @@ end
 
 [b,a] = butter(1,f1*2/fs);
 rd = filter(b, a, rb2 - rb1) / sum(b);
+rd_unscaled = filter(b, a, rb2 - rb1);
 rx = rb2 - rb1;
 DT = -rd ./ rx;
 DT(DT<0) = nan;
@@ -92,9 +93,12 @@ for i = 2:NX
     h(i) = rd(i) / dn;
 end
 
-subplot(2,1,1);plot(ns, pow2db(rb1), ns, pow2db(rb2), ns, pow2db(y), ns, pow2db(rb1 + h)), grid;
+subplot(2,1,1);
+plot(ns, pow2db(rb1), ns, pow2db(rb2), ns, pow2db(y), ns, pow2db(rb1 + h), ns, pow2db(rb1 + rd_unscaled)), grid;
+legend('slow', 'fast', 'y', 'slow + h', 'slow + rd');
 subplot(2,1,2);plot(ns, rb1, ns, rb2, ns, y, ns, rb1 + h), grid;
+legend('slow', 'fast', 'y', 'slow + h');
 
 figure(2);
-subplot(2,1,1);plot(ns, rd), grid
-subplot(2,1,2);plot(ns, DT + ns), grid
+subplot(2,1,1);plot(ns, rd), grid, legend('rd');
+subplot(2,1,2);plot(ns, pow2db((rb1 + rd_unscaled) ./ rb1)), grid, legend('(rb1+rdu)/rb1 dB');

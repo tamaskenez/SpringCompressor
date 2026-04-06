@@ -1,4 +1,4 @@
-figure(2);
+figure(3);
 fs = 48000;
 wl = round(fs/20/2) * 2 + 1;
 hwl = (wl - 1) / 2;
@@ -10,8 +10,8 @@ elseif false
     gw = gausswin(wl);
     windows = [gw gw .* linspace(-1, 1, wl)'];
 else
-    [b1, a1] = butter(3, 13.7*2/fs);
-    [b2, a2] = butter(3, 30*2/fs);
+    [b1, a1] = critdamplp2(13.7*2/fs);
+    [b2, a2] = critdamplp2(30*2/fs);
     x = [1; zeros(fs - 1, 1)];
     fx1 = filter(b1, a1, x);
     fx2 = filter(b2, a2, x);
