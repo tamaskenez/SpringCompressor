@@ -2,7 +2,7 @@
 % 1. filtering the power signal (fc1pow)
 % 2. filtering the power signal (fc2pow) then the db signal (fc2db)
 
-switch 3
+switch 4
     case 1
         fc1pow = 20;
         fc2pow = 37.5;
@@ -18,6 +18,11 @@ switch 3
         fc2pow = 29;
         fc2db = 40;
         order = 3;
+    case 4
+        fc1pow = 20;
+        fc2pow = 31;
+        fc2db = 31;
+        order = 4;
     otherwise
         assert(false)
 end
@@ -63,6 +68,10 @@ switch order
     case 3
         [b1pow, a1pow] = critdamplp2(fc1pow*2/fs);
         [b2pow, a2pow] = critdamplp2(fc2pow*2/fs);
+        [b2db, a2db] =   butter(1, fc2db*2/fs);
+    case 4
+        [b1pow, a1pow] = critdamplp2(fc1pow*2/fs);
+        [b2pow, a2pow] = butter(1, fc2pow*2/fs);
         [b2db, a2db] =   butter(1, fc2db*2/fs);
     otherwise
         assert(false)

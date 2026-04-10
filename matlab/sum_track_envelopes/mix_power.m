@@ -26,7 +26,7 @@ for i = 1:length(paths)
     % Expand mono to stereo
     if num_channels == 1
         data = power_envelope(data, fs);
-        data = [data, data];
+        data = [data data];
     else
         had_stereo = true;
         data = [power_envelope(data(:, 1), fs) power_envelope(data(:, 2), fs)];

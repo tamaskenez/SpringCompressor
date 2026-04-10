@@ -52,6 +52,11 @@ The first harmonic only minimally affected (1.5 dB lower when best)
 When prefiltering, from worst to best: pow, mag, db
 When postfiltering, from worst to best: db, mag, pow
 
+## Filtering in pow and in db domain
+
+I tried filtering in pow domain only, then matched, faster filters in pow + db.
+The behavior, suppression of ripples with different base levels, is the same.
+However, the transients are blurred more with mixed pow + db filtering.
 
 # Compressor dB transfer curve, soft knee formula
 
