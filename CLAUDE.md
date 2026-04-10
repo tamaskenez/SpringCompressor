@@ -79,7 +79,7 @@ file(GLOB_RECURSE sources CONFIGURE_DEPENDS *.h *.cpp)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
 ```
 
-## Coding style
+## C++ Coding guidelines
 
 - Use snake-case for symbols, except for type use CamelCase.
 - Call `clang-format -i` for *.cpp and *.h files after changing them.
@@ -89,4 +89,9 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
   namespace. In this project we can leave out the `std::` prefixes on those core features that should really be part of
   the language instead of the standard library. This is to reduce line noise in the code.
 
+## MATLAB coding guidelines
+
+For now keep the scripts Octave-compatible. However, let me know if using a MATLAB feature would result in significant
+benefits. In that case we'll switch to MATLAB.
+Current Octave version is 11.1.0
 
