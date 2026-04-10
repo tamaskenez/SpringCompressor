@@ -13,17 +13,22 @@ classdef Interface < handle
     %
     % All subclasses are handle classes (stateful, modified in place).
 
-    methods (Abstract)
+    % Octave does not support methods (Abstract) in classdef; using concrete
+    % methods that throw instead.  Subclasses must override all three.
+    methods
 
         % filter  Process input samples through the filter.
         %
         %   y = obj.filter(x)
         %
-        %   x - scalar or column vector of input samples
-        %   y - scalar or column vector of output samples, same size as x
+        %   x - scalar or vector of input samples
+        %   y - output samples, same size as x
         %
         % The filter state is updated in place after each call.
-        y = filter(obj, x)
+        function y = filter(obj, x)
+            error('dfilter:notImplemented', ...
+                  'filter() not implemented by subclass %s', class(obj));
+        end
 
         % reset  Reset the filter state to zero initial conditions.
         %
@@ -31,7 +36,10 @@ classdef Interface < handle
         %
         % After reset(), the filter behaves as if it has seen no prior input.
         % Filter parameters (coefficients, matrices) are not affected.
-        reset(obj)
+        function reset(obj)
+            error('dfilter:notImplemented', ...
+                  'reset() not implemented by subclass %s', class(obj));
+        end
 
         % override_output  Force the last output to a given value.
         %
@@ -42,7 +50,10 @@ classdef Interface < handle
         % Updates the internal state so that the next call to filter()
         % continues smoothly from y, avoiding discontinuities. The exact
         % state update depends on the filter topology (see subclasses).
-        override_output(obj, y)
+        function override_output(obj, y)
+            error('dfilter:notImplemented', ...
+                  'override_output() not implemented by subclass %s', class(obj));
+        end
 
     end
 
