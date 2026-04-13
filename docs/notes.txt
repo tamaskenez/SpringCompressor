@@ -123,6 +123,25 @@ TODO2: do some tests with multiband RMS detection, doesn't it suppress some ripp
 
 TODO3: test the GR signal of other compressors (might not be easy in case of non-linear phase.
 
+### Result:
+
+1. Method:
+
+- create slow and fast filtered signals, diff signal (fast - slow) and it's LP version (integrated diff)
+- the integrated diff is the baseline, the initial final envelope being slow + integ
+- this is refined by tracking a 4th filter, which is fed like integ (with diff) but it's jumped up or down of the the
+  diff signal's half is more (or less) then the DC state of the 4th filter.
+- The jump up or down is permitted if the integ signal is positive or negative
+- This refined signal will have discontinuities when the integ crosses zero. So we compute the final envelope by
+  lerping this signal with the integ signal and a tau value which is 1 if the integ is small and 0 otherwise. This
+  pull the envelope towards integ when integ is small thus it smoothes out discontinuities.
+
+2. Method
+- create a top and bottom envelope on the diff signal by applying an asymmetric envelope filter
+- create the midline. It's almost good but jaggy.
+- create a new filter, feed it with the diff signal + K times (midline - last envelope), where K is about 2-3.
+- when the diff between envelope and midline is big enough (relative to slow) then jump (in either direction).
+
 ## Summary report
 
 I've been experimenting with audio dynamic range compressor algorithms. The solution I'm looking for is a compressor which performs its duty, to compress the dynamic range of the input as cleanly and transparently as possible, with the least amount of coloring.

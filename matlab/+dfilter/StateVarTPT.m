@@ -65,6 +65,18 @@ classdef StateVarTPT < dfilter.Interface
             obj.s2 = y_out;
         end
 
-    end
+        function s = get_state(obj)
+            s = [obj.s1 obj.s2];
+        end
 
+        function s = set_state(obj, s)
+            assert(isvector(s) && length(s) == 2);
+            obj.s1 = s(1);
+            obj.s2 = s(2);
+        end
+
+        function g = get_g(obj)
+            g = obj.g;
+        end
+    end
 end
