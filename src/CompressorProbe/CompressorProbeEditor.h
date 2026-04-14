@@ -22,7 +22,9 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RoleSelectionOverlay)
 };
 
-class CompressorProbeEditor : public juce::AudioProcessorEditor
+class CompressorProbeEditor
+    : public juce::AudioProcessorEditor
+    , private juce::Timer
 {
 public:
     explicit CompressorProbeEditor(CompressorProbeProcessor& p);
@@ -34,10 +36,14 @@ public:
 private:
     void role_selected(Role r);
     void build_role_ui();
+    void timerCallback() override;
+    void refresh_generator_ui();
+    void refresh_probe_ui();
 
     CompressorProbeProcessor& probe_processor;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
-    juce::Label status_label;
+    juce::Label title_label;
+    juce::Label mode_label;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeEditor)
 };

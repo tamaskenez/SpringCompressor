@@ -8,11 +8,40 @@ enum class Role {
     Probe
 };
 
+enum class GeneratorStatus {
+    Idle,
+    TransmittingId
+};
+
+struct GoertzelFilter {
+    double coeff = 0.0;
+    double s1 = 0.0;
+    double s2 = 0.0;
+
+    void reset() noexcept
+    {
+        s1 = s2 = 0.0;
+    }
+
+    void feed(double x) noexcept
+    {
+        const double s0 = x + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+
+    // Returns |X[k]|^2 for the accumulated samples.
+    double power() const noexcept
+    {
+        return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+    }
+};
+
 class CompressorProbeProcessor : public juce::AudioProcessor
 {
 public:
     CompressorProbeProcessor();
-    ~CompressorProbeProcessor() override = default;
+    ~CompressorProbeProcessor() override;
 
     const juce::String getName() const override
     {
@@ -75,6 +104,24 @@ public:
         role.store(r);
     }
 
+    int get_generator_id() const noexcept
+    {
+        return generator_id.load();
+    }
+    GeneratorStatus get_generator_status() const noexcept
+    {
+        return generator_status.load();
+    }
+
+    bool is_engine_running() const noexcept
+    {
+        return engine_running.load();
+    }
+    int get_probe_confirmed_id() const noexcept
+    {
+        return probe_confirmed_id.load();
+    }
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)
 
 private:
@@ -88,13 +135,32 @@ private:
       211, 223, 233, 241, 257, 269, 281, 293, 307, 317, 331, 347, 353, 367, 379, 389, 401, 409
     };
 
+    // Detection threshold for Goertzel power.
+    // Expected power for a tone at amplitude 0.1 over nfft samples: (0.1 * nfft/2)^2 ≈ 41 943.
+    // Threshold at ~1/10 of that handles up to 10 dB of compressor attenuation.
+    static constexpr double detection_threshold = 4000.0;
+
     std::atomic<Role> role{Role::Unset};
+    std::atomic<bool> engine_running{false};
 
-    void setup_generator(); // called from processBlock on first block with Generator role
+    // ---- Generator state (audio thread only) ----
 
-    // Generator state — accessed on the audio thread only.
-    int generator_id = -1; // -1 until claimed; 0-65535 once a pipe is created
+    void setup_generator();
+
+    std::atomic<int> generator_id{-1}; // -1 until claimed; 0-65535 once a pipe is created
+    std::atomic<GeneratorStatus> generator_status{GeneratorStatus::Idle};
     std::unique_ptr<juce::InterprocessConnection> generator_pipe;
     std::array<float, nfft> id_tone_buf{};
     int tone_playhead = 0;
+
+    // ---- Probe state (audio thread only) ----
+
+    void process_probe_frame();
+
+    // One Goertzel filter per bin; coefficients are set in the constructor.
+    std::array<GoertzelFilter, 18> probe_filters{};
+    int probe_sample_count = 0;
+    int probe_last_decoded_id = -1;          // most recently decoded ID, -1 = none yet
+    int probe_confirm_count = 0;             // consecutive frames with the same decoded ID
+    std::atomic<int> probe_confirmed_id{-1}; // -1 until pairing is complete
 };

@@ -106,12 +106,60 @@ void CompressorProbeEditor::role_selected(Role r)
 
 void CompressorProbeEditor::build_role_ui()
 {
-    const juce::String text = probe_processor.get_role() == Role::Generator ? "Generator" : "Probe";
-    status_label.setText(text, juce::dontSendNotification);
-    status_label.setFont(juce::FontOptions(18.0f));
-    status_label.setColour(juce::Label::textColourId, juce::Colours::white);
-    status_label.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(status_label);
+    title_label.setFont(juce::FontOptions(18.0f));
+    title_label.setColour(juce::Label::textColourId, juce::Colours::white);
+    title_label.setJustificationType(juce::Justification::centred);
+
+    mode_label.setFont(juce::FontOptions(13.0f));
+    mode_label.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    mode_label.setJustificationType(juce::Justification::centred);
+
+    addAndMakeVisible(title_label);
+    addAndMakeVisible(mode_label);
+
+    if (probe_processor.get_role() == Role::Generator)
+        refresh_generator_ui();
+    else
+        refresh_probe_ui();
+    startTimer(100); // 10 Hz refresh
+}
+
+void CompressorProbeEditor::timerCallback()
+{
+    if (probe_processor.get_role() == Role::Generator)
+        refresh_generator_ui();
+    else
+        refresh_probe_ui();
+}
+
+void CompressorProbeEditor::refresh_generator_ui()
+{
+    const int id = probe_processor.get_generator_id();
+    if (id >= 0)
+        title_label.setText("Generator #" + juce::String(id), juce::dontSendNotification);
+    else
+        title_label.setText("Generator", juce::dontSendNotification);
+
+    const auto status = probe_processor.get_generator_status();
+    if (status == GeneratorStatus::TransmittingId)
+        mode_label.setText("Connecting to the probe", juce::dontSendNotification);
+    else
+        mode_label.setText({}, juce::dontSendNotification);
+}
+
+void CompressorProbeEditor::refresh_probe_ui()
+{
+    title_label.setText("Probe", juce::dontSendNotification);
+
+    if (!probe_processor.is_engine_running()) {
+        mode_label.setText("Start the audio engine to begin", juce::dontSendNotification);
+    } else {
+        const int confirmed_id = probe_processor.get_probe_confirmed_id();
+        if (confirmed_id < 0)
+            mode_label.setText("Connecting to the generator", juce::dontSendNotification);
+        else
+            mode_label.setText("Connected to generator #" + juce::String(confirmed_id), juce::dontSendNotification);
+    }
 }
 
 void CompressorProbeEditor::paint(juce::Graphics& g)
@@ -121,7 +169,13 @@ void CompressorProbeEditor::paint(juce::Graphics& g)
 
 void CompressorProbeEditor::resized()
 {
-    if (role_overlay)
+    if (role_overlay) {
         role_overlay->setBounds(getLocalBounds());
-    status_label.setBounds(getLocalBounds());
+        return;
+    }
+
+    auto area = getLocalBounds();
+    const int centre_y = area.getCentreY();
+    title_label.setBounds(area.withY(centre_y - 22).withHeight(28));
+    mode_label.setBounds(area.withY(centre_y + 10).withHeight(20));
 }

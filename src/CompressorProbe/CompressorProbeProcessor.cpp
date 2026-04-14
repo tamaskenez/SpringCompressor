@@ -17,6 +17,12 @@ public:
     void messageReceived(const juce::MemoryBlock&) override {}
 };
 
+CompressorProbeProcessor::~CompressorProbeProcessor()
+{
+    if (generator_pipe)
+        generator_pipe->disconnect();
+}
+
 CompressorProbeProcessor::CompressorProbeProcessor()
     : AudioProcessor(
         BusesProperties()
@@ -24,6 +30,9 @@ CompressorProbeProcessor::CompressorProbeProcessor()
           .withOutput("Output", juce::AudioChannelSet::stereo(), true)
       )
 {
+    // Goertzel coefficients depend only on the fixed bin indices and nfft — set once.
+    for (size_t i = 0; i < id_bins.size(); ++i)
+        probe_filters[i].coeff = 2.0 * std::cos(2.0 * juce::MathConstants<double>::pi * id_bins[i] / nfft);
 }
 
 void CompressorProbeProcessor::setup_generator()
@@ -31,13 +40,13 @@ void CompressorProbeProcessor::setup_generator()
     // Pick a random 16-bit starting ID and search forward until we find a pipe name
     // that doesn't exist yet. With 65536 possible IDs, this nearly always succeeds
     // on the first try; stale files from a previous crash are simply skipped.
-    if (generator_id < 0) {
+    if (generator_id.load() < 0) {
         const auto start = static_cast<uint16_t>(std::random_device{}());
         auto id = start;
         do {
             auto pipe = std::make_unique<GeneratorPipe>();
             if (pipe->createPipe("CompressorProbe-" + juce::String(id), 0, true)) {
-                generator_id = id;
+                generator_id.store(id);
                 generator_pipe = std::move(pipe);
                 break;
             }
@@ -45,8 +54,10 @@ void CompressorProbeProcessor::setup_generator()
         } while (id != start); // full wrap means all 65536 are taken (practically impossible)
     }
 
-    if (generator_id < 0)
+    if (generator_id.load() < 0)
         return;
+
+    generator_status.store(GeneratorStatus::TransmittingId);
 
     // Build the ID tone buffer: a block of nfft samples of exact on-bin sinusoids.
     // Each sinusoid completes an integer number of cycles in nfft samples, so the
@@ -75,9 +86,52 @@ void CompressorProbeProcessor::setup_generator()
 void CompressorProbeProcessor::prepareToPlay(double /*sampleRate*/, int /*samplesPerBlock*/)
 {
     tone_playhead = 0;
+
+    // Reset probe detection state so pairing runs again on each engine restart.
+    for (auto& f : probe_filters)
+        f.reset();
+    probe_sample_count = 0;
+    probe_last_decoded_id = -1;
+    probe_confirm_count = 0;
+    probe_confirmed_id.store(-1);
+    engine_running.store(true);
 }
 
-void CompressorProbeProcessor::releaseResources() {}
+void CompressorProbeProcessor::process_probe_frame()
+{
+    const double sync_on_power = probe_filters[0].power();
+    const double sync_off_power = probe_filters[1].power();
+
+    int decoded_id = 0;
+    for (int b = 0; b < 16; ++b) {
+        if (probe_filters[static_cast<size_t>(2 + b)].power() > detection_threshold)
+            decoded_id |= (1 << b);
+    }
+
+    for (auto& f : probe_filters)
+        f.reset();
+
+    // Require sync_on present and sync_off absent to accept this frame.
+    if (sync_on_power < detection_threshold || sync_off_power > detection_threshold) {
+        probe_last_decoded_id = -1;
+        probe_confirm_count = 0;
+        return;
+    }
+
+    // Require 3 consecutive frames with the same ID before confirming.
+    if (decoded_id == probe_last_decoded_id) {
+        if (++probe_confirm_count >= 3)
+            probe_confirmed_id.store(decoded_id);
+    } else {
+        probe_last_decoded_id = decoded_id;
+        probe_confirm_count = 1;
+    }
+}
+
+void CompressorProbeProcessor::releaseResources()
+{
+    engine_running.store(false);
+}
 
 void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
 {
@@ -85,6 +139,23 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     const auto current_role = role.load();
 
     if (current_role == Role::Probe) {
+        if (probe_confirmed_id.load() < 0) {
+            // Accumulate samples and run Goertzel detection frame by frame.
+            const int num_samples = buffer.getNumSamples();
+            const int num_channels = buffer.getNumChannels();
+            for (int i = 0; i < num_samples; ++i) {
+                double mono = 0.0;
+                for (int ch = 0; ch < num_channels; ++ch)
+                    mono += buffer.getSample(ch, i);
+                mono /= num_channels;
+                for (auto& f : probe_filters)
+                    f.feed(mono);
+                if (++probe_sample_count == nfft) {
+                    process_probe_frame();
+                    probe_sample_count = 0;
+                }
+            }
+        }
         buffer.clear();
         return;
     }
@@ -92,11 +163,11 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     if (current_role != Role::Generator)
         return; // unset role: pass through
 
-    if (generator_id < 0)
+    if (generator_id.load() < 0)
         setup_generator();
 
-    if (generator_id < 0)
-        return; // all 16 IDs taken: pass through
+    if (generator_id.load() < 0)
+        return; // all 65536 IDs taken: pass through
 
     const int num_samples = buffer.getNumSamples();
     const int num_channels = buffer.getNumChannels();
