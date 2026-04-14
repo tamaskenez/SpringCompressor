@@ -10,7 +10,8 @@ enum class Role {
 
 enum class GeneratorStatus {
     Idle,
-    TransmittingId
+    TransmittingId,
+    Connected
 };
 
 struct GoertzelFilter {
@@ -156,6 +157,7 @@ private:
     // ---- Probe state (audio thread only) ----
 
     void process_probe_frame();
+    void connect_to_generator();
 
     // One Goertzel filter per bin; coefficients are set in the constructor.
     std::array<GoertzelFilter, 18> probe_filters{};
@@ -163,4 +165,6 @@ private:
     int probe_last_decoded_id = -1;          // most recently decoded ID, -1 = none yet
     int probe_confirm_count = 0;             // consecutive frames with the same decoded ID
     std::atomic<int> probe_confirmed_id{-1}; // -1 until pairing is complete
+    std::unique_ptr<juce::InterprocessConnection> probe_pipe;
+    std::atomic<bool> probe_connection_pending{false};
 };

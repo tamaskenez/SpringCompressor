@@ -1,14 +1,38 @@
 #include "CompressorProbeProcessor.h"
 
+#include "Command.h"
 #include "CompressorProbeEditor.h"
 
 #include <meadow/cppext.h>
 
-// Minimal InterprocessConnection subclass used to claim and hold a generator ID pipe.
+// Holds the generator's named pipe and dispatches incoming commands via a callback.
 class GeneratorPipe : public juce::InterprocessConnection
 {
 public:
+    std::function<void(const Command::V&)> on_command;
+
     GeneratorPipe()
+        : juce::InterprocessConnection(/*callbacksOnMessageThread=*/false)
+    {
+    }
+    void connectionMade() override {}
+    void connectionLost() override {}
+    void messageReceived(const juce::MemoryBlock& mb) override
+    {
+        if (mb.getSize() != sizeof(Command::V))
+            return;
+        Command::V cmd;
+        std::memcpy(&cmd, mb.getData(), sizeof(cmd));
+        if (on_command)
+            on_command(cmd);
+    }
+};
+
+// Probe-side pipe: connects to the generator and sends commands; receives nothing.
+class ProbePipe : public juce::InterprocessConnection
+{
+public:
+    ProbePipe()
         : juce::InterprocessConnection(/*callbacksOnMessageThread=*/false)
     {
     }
@@ -21,6 +45,8 @@ CompressorProbeProcessor::~CompressorProbeProcessor()
 {
     if (generator_pipe)
         generator_pipe->disconnect();
+    if (probe_pipe)
+        probe_pipe->disconnect();
 }
 
 CompressorProbeProcessor::CompressorProbeProcessor()
@@ -46,6 +72,10 @@ void CompressorProbeProcessor::setup_generator()
         do {
             auto pipe = std::make_unique<GeneratorPipe>();
             if (pipe->createPipe("CompressorProbe-" + juce::String(id), 0, true)) {
+                pipe->on_command = [this](const Command::V& cmd) {
+                    if (std::holds_alternative<Command::Stop>(cmd))
+                        generator_status.store(GeneratorStatus::Connected);
+                };
                 generator_id.store(id);
                 generator_pipe = std::move(pipe);
                 break;
@@ -133,6 +163,21 @@ void CompressorProbeProcessor::releaseResources()
     engine_running.store(false);
 }
 
+void CompressorProbeProcessor::connect_to_generator()
+{
+    const int id = probe_confirmed_id.load();
+    if (id < 0)
+        return;
+    auto pipe = std::make_unique<ProbePipe>();
+    if (!pipe->connectToPipe("CompressorProbe-" + juce::String(id), 1000))
+        return;
+    Command::V cmd = Command::Stop{};
+    juce::MemoryBlock mb(sizeof(cmd));
+    std::memcpy(mb.getData(), &cmd, sizeof(cmd));
+    pipe->sendMessage(mb);
+    probe_pipe = std::move(pipe);
+}
+
 void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midiMessages*/)
 {
     juce::ScopedNoDenormals no_denormals;
@@ -155,6 +200,11 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
                     probe_sample_count = 0;
                 }
             }
+        } else if (!probe_connection_pending.exchange(true)) {
+            // ID just confirmed: connect to the generator and send Stop (message thread).
+            juce::MessageManager::callAsync([this] {
+                connect_to_generator();
+            });
         }
         buffer.clear();
         return;
@@ -168,6 +218,9 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
     if (generator_id.load() < 0)
         return; // all 65536 IDs taken: pass through
+
+    if (generator_status.load() == GeneratorStatus::Connected)
+        return; // probe acknowledged: pass audio through
 
     const int num_samples = buffer.getNumSamples();
     const int num_channels = buffer.getNumChannels();
