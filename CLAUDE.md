@@ -29,24 +29,51 @@ cmake -S . -B _b -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build _b
 ```
 
-## C++ Guidelines
+## Coding Guidelines
 
-- Avoid platform-specific code whenever possible.
+Avoid platform-specific code whenever possible.
 
 ### Architecture
 
-The JUCE framework pushes towards a certain relationship between AudioProcessor and AudioProcessorEditor:
-The AudioProcessorEditor knows about the concrete AudioProcessor while the AudioProcessor is discouraged
-to even talk to the generic AudioProcessorEditor. This makes the AudioProcessorEditor higher level.
+In our projects there is a central, main component which
 
-In our case we push against this approach and prefer the AudioProcessor be higher-level and the one that knows about the other.
+- receives all messages in a central dispatcher
+- initiates all state transitions
+- delegates work to subcomponents by instructing them, without any inversion of control
+
+The UI component
+
+- is primarily a passive drawing surface
+- doesn't make any decisions
+- user actions (button click, etc..) are mostly routed back to the main component which decides what to do
+- might get direct but read-only access to the application state
+- ideally reports user actions with asynchronous messages but direct function call to an interface implemented by the
+  main component is also possible in simpler cases.
+
+These are guidelines, the starting point. They can be violated when the cost/benefit ratio is better otherwise.
+
+Example in case of JUCE AudioProcessor and AudioProcessorEditor: The strong coupling is from the AudioProcessor towards
+the editor. The other way is loose coupling.
 
 ### Conventions
 
 Some frequency parameter names are postfixed with "_hps" which means half-cycles per second, that is, normalized to the
 Nyquist frequency (MATLAB convention).
 
-### Numeric conversion
+## C++ Coding guidelines
+
+- Use snake-case for symbols, except for type use CamelCase.
+- Call `clang-format -i` for *.cpp and *.h files after changing them.
+- When possible, use std::format, std::print, std::println instead of the older, overloaded "<<" operator based techniques.
+- Always put for-loop bodies in curly-braces.
+- The header <meadow/cppext.h> lifts a certain subset of symbols from the std namespace into the global
+  namespace. In this project we can leave out the `std::` prefixes on those core features that should really be part of
+  the language instead of the standard library. This is to reduce line noise in the code.
+- include order: start with closest header (cpp's own header) and proceed towards farther headers (third-party, system).
+- include style: use double quotes for in-project headers, angle-brackets for everything else.
+- the branches of an `if` statements must always use curly-braces, even for single-line branches.
+
+### Numeric conversions
 
 The project has many C++ warnings enabled as errors (see clang_warnings.cmake) including
 numeric conversion warnings. To silence the numeric conversion warnings, instead of
@@ -58,18 +85,8 @@ casting functions have a debug check and restrict their parameter types.
 - float -> integer: Use iround<integer-type>, ifloor<integer-type> or iceil<integer-type>.
 - float -> double: Use ffcast<float> to cast from double to float.
 
-### Include order and style
 
-```
-#include "corresponding_header.h"
-#include "headers_of_same_target.h"
-#include "headers_from_this_project.h"
-#include <third_party_headers.h>
-#include <c++_standard_library_headers>
-#include <c_standard_library_headers.h>
-```
-
-## CMake hints
+## CMake style
 
 Set up the project for C++23.
 Prefer adding source files to targets via globbing. Collect and set up source files like this:
@@ -78,16 +95,6 @@ Prefer adding source files to targets via globbing. Collect and set up source fi
 file(GLOB_RECURSE sources CONFIGURE_DEPENDS *.h *.cpp)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${sources})
 ```
-
-## C++ Coding guidelines
-
-- Use snake-case for symbols, except for type use CamelCase.
-- Call `clang-format -i` for *.cpp and *.h files after changing them.
-- When possible, use std::format, std::print, std::println instead of the older, overloaded "<<" operator based techniques.
-- Always put for-loop bodies in curly-braces.
-- The header <meadow/cppext.h> lifts a certain subset of symbols from the std namespace into the global
-  namespace. In this project we can leave out the `std::` prefixes on those core features that should really be part of
-  the language instead of the standard library. This is to reduce line noise in the code.
 
 ## MATLAB coding guidelines
 

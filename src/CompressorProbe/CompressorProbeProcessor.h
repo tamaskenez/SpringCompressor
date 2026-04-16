@@ -1,23 +1,27 @@
 #pragma once
 
+#include "CommonState.h"
 #include "GeneratorRole.h"
 #include "ProbeRole.h"
+#include "ProcessorInterface.h"
+
+#include "juce_util/JuceTimer.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <atomic>
 
-enum class Role {
-    Unset,
-    Generator,
-    Probe
-};
+class CompressorProbeEditor;
+class RoleInterface;
+class FileLogSink;
 
-class CompressorProbeProcessor : public juce::AudioProcessor
+class CompressorProbeProcessor
+    : public juce::AudioProcessor
+    , public ProcessorInterface
 {
 public:
     CompressorProbeProcessor();
-    ~CompressorProbeProcessor() override = default;
+    ~CompressorProbeProcessor() override;
 
     const juce::String getName() const override
     {
@@ -71,41 +75,20 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    Role get_role() const noexcept
-    {
-        return role.load();
-    }
-    void set_role(Role r) noexcept
-    {
-        role.store(r);
-    }
+    void on_ui_refresh_timer_elapsed();
+    CompressorProbeEditor* get_active_editor() const;
 
-    bool is_engine_running() const noexcept
-    {
-        return engine_running.load();
-    }
-
-    // Generator UI state — delegates to GeneratorRole.
-    int get_generator_id() const noexcept
-    {
-        return generator_role.get_id();
-    }
-    GeneratorStatus get_generator_status() const noexcept
-    {
-        return generator_role.get_status();
-    }
-
-    // Probe UI state — delegates to ProbeRole.
-    int get_probe_confirmed_id() const noexcept
-    {
-        return probe_role.get_confirmed_id();
-    }
+    // ProcessorInterface functions
+    void on_role_selected_by_user(Role role) override;
+    std::pair<GeneratorStatus, std::optional<std::string>> get_generator_status() const override;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)
 
 private:
-    std::atomic<Role> role{Role::Unset};
-    std::atomic<bool> engine_running{false};
-    GeneratorRole generator_role;
-    ProbeRole probe_role;
+    unique_ptr<FileLogSink> file_log_sink;
+    CommonState common_state;
+    unique_ptr<RoleInterface> role_impl;
+    JuceTimer ui_refresh_timer;
+
+    std::atomic<RoleInterface*> role_impl_for_audio_thread;
 };

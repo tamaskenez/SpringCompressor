@@ -1,13 +1,13 @@
 juce_add_plugin(CompressorProbe
-    COMPANY_NAME "SpringAudio"
+    COMPANY_NAME "TextbookAudio"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
-    PLUGIN_MANUFACTURER_CODE Spng
-    PLUGIN_CODE Cprb
+    PLUGIN_MANUFACTURER_CODE TXBA
+    PLUGIN_CODE CPRB
     FORMATS AU VST3 Standalone
     PRODUCT_NAME "Compressor Probe"
 )
@@ -28,6 +28,9 @@ target_link_libraries(CompressorProbe
     PRIVATE
         juce::juce_audio_utils
         meadow::meadow
+        juce_util
+        abseil::abseil
+        magic_enum::magic_enum
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

@@ -1,12 +1,16 @@
 #pragma once
 
+#include "CommonState.h"
 #include "ProbeProtocol.h"
+#include "RoleInterface.h"
+#include "pipes.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <array>
-#include <atomic>
 #include <memory>
+
+struct CommonState;
 
 struct GoertzelFilter {
     double coeff = 0.0;
@@ -32,36 +36,32 @@ struct GoertzelFilter {
     }
 };
 
-class ProbeRole
+class ProbeRole : public RoleInterface
 {
 public:
-    ProbeRole(); // initialises Goertzel coefficients
-    ~ProbeRole();
+    explicit ProbeRole(CommonState& common_state); // initialises Goertzel coefficients
 
-    // Called from prepareToPlay (audio thread). Resets all detection state.
-    void prepare();
-
-    // Called from processBlock (audio thread). Always clears the output buffer.
-    void process_block(juce::AudioBuffer<float>& buffer);
-
-    // UI-thread-safe accessor.
-    int get_confirmed_id() const noexcept
-    {
-        return confirmed_id.load();
-    }
+    void prepare_to_play(double sample_rate, int samples_per_block) override;
+    void process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages) override;
+    void release_resources() override;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProbeRole)
 
 private:
-    void process_frame();
-    void connect_to_generator();
+    // Message thread variables and functions
+    CommonState& common_state;
+    std::unique_ptr<Pipe> pipe;
+
+    void on_generator_id_decoded(int id);
+
+    // Audio thread variables and functions
 
     // One Goertzel filter per bin; coefficients are set in the constructor.
     std::array<GoertzelFilter, ProbeProtocol::id_bins.size()> filters{};
     int sample_count = 0;
-    int last_decoded_id = -1;          // most recently decoded ID, -1 = none yet
-    int confirm_count = 0;             // consecutive frames with the same decoded ID
-    std::atomic<int> confirmed_id{-1}; // -1 until pairing is complete
-    std::unique_ptr<juce::InterprocessConnection> pipe;
-    std::atomic<bool> connection_pending{false};
+    int last_decoded_id = -1; // most recently decoded ID, -1 = none yet
+    int confirm_count = 0;    // consecutive frames with the same decoded ID
+    std::optional<int> confirmed_generator_id;
+
+    void process_frame();
 };

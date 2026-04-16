@@ -1,48 +1,34 @@
 #include "ProbeRole.h"
 
 #include "Command.h"
+#include "CommonState.h"
+#include "pipes.h"
 
 #include <meadow/cppext.h>
 
-// Probe-side pipe: connects to the generator and sends commands; receives nothing.
-class ProbePipe : public juce::InterprocessConnection
-{
-public:
-    ProbePipe()
-        : juce::InterprocessConnection(/*callbacksOnMessageThread=*/false)
-    {
-    }
-    void connectionMade() override {}
-    void connectionLost() override {}
-    void messageReceived(const juce::MemoryBlock&) override {}
-};
-
-ProbeRole::ProbeRole()
+ProbeRole::ProbeRole(CommonState& common_state_arg)
+    : common_state(common_state_arg)
 {
     for (size_t i = 0; i < ProbeProtocol::id_bins.size(); ++i)
         filters[i].coeff =
           2.0 * std::cos(2.0 * juce::MathConstants<double>::pi * ProbeProtocol::id_bins[i] / ProbeProtocol::nfft);
 }
 
-ProbeRole::~ProbeRole()
-{
-    if (pipe)
-        pipe->disconnect();
-}
-
-void ProbeRole::prepare()
+// Might be called on audio thread, but strictly before process_block.
+void ProbeRole::prepare_to_play(double /*sample_rate*/, int /*samples_per_block*/)
 {
     for (auto& f : filters)
         f.reset();
     sample_count = 0;
     last_decoded_id = -1;
     confirm_count = 0;
-    confirmed_id.store(-1);
-    if (pipe) {
-        pipe->disconnect();
-        pipe.reset();
-    }
-    connection_pending.store(false);
+    confirmed_generator_id.reset();
+}
+
+void ProbeRole::release_resources()
+{
+    pipe.reset();
+    common_state.generator_id.reset();
 }
 
 void ProbeRole::process_frame()
@@ -52,7 +38,7 @@ void ProbeRole::process_frame()
 
     int decoded_id = 0;
     for (int b = 0; b < 16; ++b) {
-        if (filters[static_cast<size_t>(2 + b)].power() > ProbeProtocol::detection_threshold)
+        if (filters[sucast(2 + b)].power() > ProbeProtocol::detection_threshold)
             decoded_id |= (1 << b);
     }
 
@@ -68,32 +54,23 @@ void ProbeRole::process_frame()
 
     // Require 3 consecutive frames with the same ID before confirming.
     if (decoded_id == last_decoded_id) {
-        if (++confirm_count >= 3)
-            confirmed_id.store(decoded_id);
+        if (++confirm_count >= 3) {
+            confirmed_generator_id = decoded_id;
+            juce::MessageManager::callAsync([this, decoded_id, weak_token = weak_ptr(common_state.token)] {
+                if (weak_token.lock()) {
+                    on_generator_id_decoded(decoded_id);
+                }
+            });
+        }
     } else {
         last_decoded_id = decoded_id;
         confirm_count = 1;
     }
 }
 
-void ProbeRole::connect_to_generator()
+void ProbeRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi_messages*/)
 {
-    const int id = confirmed_id.load();
-    if (id < 0)
-        return;
-    auto p = std::make_unique<ProbePipe>();
-    if (!p->connectToPipe("CompressorProbe-" + juce::String(id), 1000))
-        return;
-    Command::V cmd = Command::Stop{};
-    juce::MemoryBlock mb(sizeof(cmd));
-    std::memcpy(mb.getData(), &cmd, sizeof(cmd));
-    p->sendMessage(mb);
-    pipe = std::move(p);
-}
-
-void ProbeRole::process_block(juce::AudioBuffer<float>& buffer)
-{
-    if (confirmed_id.load() < 0) {
+    if (!confirmed_generator_id) {
         // Accumulate samples and run Goertzel detection frame by frame.
         const int num_samples = buffer.getNumSamples();
         const int num_channels = buffer.getNumChannels();
@@ -109,11 +86,26 @@ void ProbeRole::process_block(juce::AudioBuffer<float>& buffer)
                 sample_count = 0;
             }
         }
-    } else if (!connection_pending.exchange(true)) {
-        // ID just confirmed: connect to the generator and send Stop (message thread).
-        juce::MessageManager::callAsync([this] {
-            connect_to_generator();
-        });
     }
     buffer.clear();
+}
+
+void ProbeRole::on_generator_id_decoded(int id)
+{
+    auto a = common_state.file_log_sink->activate();
+
+    auto p = Pipe::connect(id, *common_state.file_log_sink);
+    if (!p) {
+        common_state.error =
+          format("Generator ID #{} received but failed to connect to named pipe \"{}\"", id, get_pipe_name_for_id(id));
+        return;
+    }
+    if (!p->send_command(Command::Stop{})) {
+        common_state.error = format(
+          "Generator ID #{} received but failed to send message to named pipe \"{}\"", id, get_pipe_name_for_id(id)
+        );
+        return;
+    }
+    pipe = MOVE(p);
+    common_state.generator_id = id;
 }

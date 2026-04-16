@@ -1,8 +1,12 @@
 #pragma once
 
-#include "CompressorProbeProcessor.h"
+#include "GeneratorStatus.h"
+#include "Role.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+
+class ProcessorInterface;
+struct CommonState;
 
 class RoleSelectionOverlay : public juce::Component
 {
@@ -22,28 +26,25 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RoleSelectionOverlay)
 };
 
-class CompressorProbeEditor
-    : public juce::AudioProcessorEditor
-    , private juce::Timer
+class CompressorProbeEditor : public juce::AudioProcessorEditor
 {
 public:
-    explicit CompressorProbeEditor(CompressorProbeProcessor& p);
+    CompressorProbeEditor(juce::AudioProcessor& p, ProcessorInterface* event_target, const CommonState& common_state);
     ~CompressorProbeEditor() override = default;
 
     void paint(juce::Graphics&) override;
     void resized() override;
 
+    void refresh_ui();
+
 private:
-    void role_selected(Role r);
-    void build_role_ui();
-    void timerCallback() override;
     void refresh_generator_ui();
     void refresh_probe_ui();
 
-    CompressorProbeProcessor& probe_processor;
+    ProcessorInterface* processor_interface;
+    const CommonState& common_state;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
-    juce::Label title_label;
-    juce::Label mode_label;
+    juce::Label title_label, mode_label, error_label;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeEditor)
 };

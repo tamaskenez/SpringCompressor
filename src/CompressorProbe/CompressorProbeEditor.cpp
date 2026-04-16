@@ -1,5 +1,8 @@
 #include "CompressorProbeEditor.h"
 
+#include "CommonState.h"
+#include "ProcessorInterface.h"
+
 // --- RoleSelectionOverlay ---
 
 RoleSelectionOverlay::RoleSelectionOverlay()
@@ -80,85 +83,93 @@ void RoleSelectionOverlay::resized()
 
 // --- CompressorProbeEditor ---
 
-CompressorProbeEditor::CompressorProbeEditor(CompressorProbeProcessor& p)
+CompressorProbeEditor::CompressorProbeEditor(
+  juce::AudioProcessor& p, ProcessorInterface* event_target_arg, const CommonState& common_state_arg
+)
     : AudioProcessorEditor(p)
-    , probe_processor(p)
+    , processor_interface(event_target_arg)
+    , common_state(common_state_arg)
 {
-    if (probe_processor.get_role() == Role::Unset) {
+    if (!common_state.role) {
         role_overlay = std::make_unique<RoleSelectionOverlay>();
         role_overlay->on_role_selected = [this](Role r) {
-            role_selected(r);
+            processor_interface->on_role_selected_by_user(r);
         };
         addAndMakeVisible(*role_overlay);
     } else {
-        build_role_ui();
+        refresh_ui();
     }
     setSize(400, 300);
 }
 
-void CompressorProbeEditor::role_selected(Role r)
+void CompressorProbeEditor::refresh_ui()
 {
-    probe_processor.set_role(r);
-    role_overlay.reset();
-    build_role_ui();
-    resized();
-}
+    if (auto role = common_state.role) {
+        role_overlay.reset();
 
-void CompressorProbeEditor::build_role_ui()
-{
-    title_label.setFont(juce::FontOptions(18.0f));
-    title_label.setColour(juce::Label::textColourId, juce::Colours::white);
-    title_label.setJustificationType(juce::Justification::centred);
+        title_label.setFont(juce::FontOptions(18.0f));
+        title_label.setColour(juce::Label::textColourId, juce::Colours::white);
+        title_label.setJustificationType(juce::Justification::centred);
 
-    mode_label.setFont(juce::FontOptions(13.0f));
-    mode_label.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
-    mode_label.setJustificationType(juce::Justification::centred);
+        mode_label.setFont(juce::FontOptions(13.0f));
+        mode_label.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+        mode_label.setJustificationType(juce::Justification::centred);
 
-    addAndMakeVisible(title_label);
-    addAndMakeVisible(mode_label);
+        addAndMakeVisible(title_label);
+        addAndMakeVisible(mode_label);
 
-    if (probe_processor.get_role() == Role::Generator)
-        refresh_generator_ui();
-    else
-        refresh_probe_ui();
-    startTimer(100); // 10 Hz refresh
-}
+        if (common_state.error) {
+            error_label.setFont(juce::FontOptions(13.0f));
+            error_label.setColour(juce::Label::textColourId, juce::Colours::red);
+            error_label.setJustificationType(juce::Justification::left);
+            error_label.setText(*common_state.error, juce::dontSendNotification);
+            addAndMakeVisible(error_label);
+        }
 
-void CompressorProbeEditor::timerCallback()
-{
-    if (probe_processor.get_role() == Role::Generator)
-        refresh_generator_ui();
-    else
-        refresh_probe_ui();
+        switch (*role) {
+        case Role::Generator:
+            refresh_generator_ui();
+            break;
+        case Role::Probe:
+            refresh_probe_ui();
+            break;
+        }
+        resized();
+    }
 }
 
 void CompressorProbeEditor::refresh_generator_ui()
 {
-    const int id = probe_processor.get_generator_id();
-    if (id >= 0)
-        title_label.setText("Generator #" + juce::String(id), juce::dontSendNotification);
+    if (common_state.generator_id)
+        title_label.setText("Generator #" + juce::String(*common_state.generator_id), juce::dontSendNotification);
     else
         title_label.setText("Generator", juce::dontSendNotification);
 
-    const auto status = probe_processor.get_generator_status();
-    if (status == GeneratorStatus::TransmittingId)
+    if (processor_interface->get_generator_status().first == GeneratorStatus::TransmittingId)
         mode_label.setText("Connecting to the probe", juce::dontSendNotification);
-    else
-        mode_label.setText({}, juce::dontSendNotification);
+    else {
+        if (auto current_generator_command = processor_interface->get_generator_status().second) {
+            mode_label.setText(*current_generator_command, juce::dontSendNotification);
+        } else {
+            mode_label.setText({}, juce::dontSendNotification);
+        }
+    }
 }
 
 void CompressorProbeEditor::refresh_probe_ui()
 {
     title_label.setText("Probe", juce::dontSendNotification);
 
-    if (!probe_processor.is_engine_running()) {
+    if (!common_state.prepared_to_play) {
         mode_label.setText("Start the audio engine to begin", juce::dontSendNotification);
     } else {
-        const int confirmed_id = probe_processor.get_probe_confirmed_id();
-        if (confirmed_id < 0)
+        if (common_state.generator_id) {
+            mode_label.setText(
+              "Connected to generator #" + juce::String(*common_state.generator_id), juce::dontSendNotification
+            );
+        } else {
             mode_label.setText("Connecting to the generator", juce::dontSendNotification);
-        else
-            mode_label.setText("Connected to generator #" + juce::String(confirmed_id), juce::dontSendNotification);
+        }
     }
 }
 
@@ -178,4 +189,5 @@ void CompressorProbeEditor::resized()
     const int centre_y = area.getCentreY();
     title_label.setBounds(area.withY(centre_y - 22).withHeight(28));
     mode_label.setBounds(area.withY(centre_y + 10).withHeight(20));
+    error_label.setBounds(area.withY(centre_y + 30).withHeight(40));
 }

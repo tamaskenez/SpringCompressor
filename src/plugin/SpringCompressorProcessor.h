@@ -1,8 +1,10 @@
 #pragma once
 
-#include "JuceTimer.h"
 #include "engine.h"
 #include "generate_scope_data.h"
+
+#include "juce_util/JuceTimer.h"
+
 #include "meadow/evariant.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>

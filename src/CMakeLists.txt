@@ -1,4 +1,5 @@
 add_subdirectory(engine)
+add_subdirectory(juce_util)
 add_subdirectory(plugin)
 add_subdirectory(testing)
 add_subdirectory(selfmod_engine)

@@ -3,6 +3,7 @@ gtest/1.17.0
 magic_enum/0.9.7
 readerwriterqueue/1.0.6
 pocketfft/0.0.0.cci.20240801
+abseil/20260107.1
 
 [generators]
 CMakeDeps

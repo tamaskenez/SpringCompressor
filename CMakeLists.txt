@@ -14,6 +14,7 @@ find_package(GTest REQUIRED CONFIG)
 find_package(magic_enum REQUIRED CONFIG)
 find_package(readerwriterqueue REQUIRED CONFIG)
 find_package(pocketfft REQUIRED CONFIG)
+find_package(absl REQUIRED CONFIG)
 
 set(TESTING_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/_o")
 file(MAKE_DIRECTORY ${TESTING_OUTPUT_DIR})
