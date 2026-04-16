@@ -51,8 +51,10 @@ private:
     // Message thread variables and functions
     CommonState& common_state;
     std::unique_ptr<Pipe> pipe;
+    optional<Command::V> pending_command; // Command that has been sent but no response received.
 
     void on_generator_id_decoded(int id);
+    void on_pipe_message_received(span<const char> memory_block);
 
     // Audio thread variables and functions
 

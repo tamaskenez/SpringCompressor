@@ -59,9 +59,8 @@ GeneratorRole::GeneratorRole(CommonState& common_state_arg)
         );
         return;
     }
-    new_pipe->on_command = [this](const Command::V& cmd) {
-        auto a = common_state.file_log_sink->activate();
-        on_pipe_command_received(cmd);
+    new_pipe->on_message_received = [this](span<const char> memory_block) {
+        on_pipe_message_received(memory_block);
     };
     common_state.generator_id = new_id;
     pipe = MOVE(new_pipe);
@@ -100,12 +99,25 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
     }
 }
 
-void GeneratorRole::on_pipe_command_received(const Command::V& cmd)
+void GeneratorRole::on_pipe_message_received(span<const char> memory_block)
 {
-    if (std::holds_alternative<Command::Stop>(cmd)) {
-        LOG(INFO) << "GeneratorRole::on_pipe_command_received: Stop";
+    auto a = common_state.file_log_sink->activate();
+
+    auto cmd_or = command_from_span(memory_block);
+    if (!cmd_or) {
+        LOG(ERROR) << format("GeneratorRole::on_pipe_message_received: {}", cmd_or.error());
+        return;
+    }
+
+    auto& cmd = *cmd_or;
+    switch (enum_of(cmd)) {
+    case Command::E::Stop:
+        LOG(INFO) << "GeneratorRole::on_pipe_message_received: Stop";
         status.store(GeneratorStatus::Connected);
-    } else {
-        LOG(ERROR) << "GeneratorRole::on_pipe_command_received: Unknown command";
+        break;
+    EVARIANT_CASE2(cmd, Command, DecibelCycle, x) {
+        LOG(INFO) << format("GeneratorRole::on_pipe_message_received: DecibelCycle: {}", x.to_string());
+        // todo
+    } break;
     }
 }

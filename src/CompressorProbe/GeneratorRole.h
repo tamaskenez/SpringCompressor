@@ -21,8 +21,6 @@ public:
     void process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages) override;
     void release_resources() override;
 
-    void on_pipe_command_received(const Command::V& command);
-
     GeneratorStatus get_status() const noexcept
     {
         return status.load();
@@ -39,11 +37,15 @@ public:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GeneratorRole)
 
 private:
+    // Message thread variables and functions
     CommonState& common_state;
-
-    std::atomic<GeneratorStatus> status{GeneratorStatus::Idle};
     std::unique_ptr<juce::InterprocessConnection> pipe;
+    std::atomic<GeneratorStatus> status{GeneratorStatus::Idle};
+    std::optional<Command::V> current_command;
+
+    void on_pipe_message_received(span<const char> memory_block);
+
+    // Audio thread variables and functions
     vector<float> tone_buf;
     int tone_playhead = 0;
-    std::optional<Command::V> current_command;
 };

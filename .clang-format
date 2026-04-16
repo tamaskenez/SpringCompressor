@@ -32,6 +32,5 @@ SpaceAfterTemplateKeyword: false
 Macros:
 - INFIX_GLM_DOT=* Binder() *
 - INFIX_GLM_DOT(X)=* Binder() * (X)
-- EVARIANT_CASE(w, n, a, v)=case n:{
-- EVARIANT_BREAK=}
+- "EVARIANT_CASE2(w, n, a, v)=case n:"
 IfMacros: [IF_MATCH]

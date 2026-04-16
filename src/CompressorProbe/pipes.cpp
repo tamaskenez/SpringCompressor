@@ -49,15 +49,10 @@ void Pipe::messageReceived(const juce::MemoryBlock& message)
 {
     auto a = file_log_sink.activate();
 
-    LOG_IF(FATAL, message.getSize() != sizeof(Command::V))
-      << format("Pipe::messageReceived, invalid size: {} instead of {}", message.getSize(), sizeof(Command::V));
     LOG(INFO) << format("Pipe::messageReceived, size: {}", message.getSize());
 
-    static_assert(std::is_trivially_copyable_v<Command::V>);
-    Command::V cmd;
-    std::memcpy(&cmd, message.getData(), sizeof(cmd));
-    if (on_command) {
-        on_command(MOVE(cmd));
+    if (on_message_received) {
+        on_message_received(span(static_cast<const char*>(message.getData()), message.getSize()));
     }
 }
 

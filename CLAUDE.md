@@ -81,7 +81,7 @@ numeric conversion warnings. To silence the numeric conversion warnings, instead
 casting functions have a debug check and restrict their parameter types.
 
 - Sign conversion: Use sucast() and uscast() to convert between unsigned and signed types of the same size.
-- Integer -> integer: Use iicast<target-integer-type>() to narrow.
+- Integer -> integer: Use iicast<target-integer-type>() to narrow and optionally change signedness, too.
 - float -> integer: Use iround<integer-type>, ifloor<integer-type> or iceil<integer-type>.
 - float -> double: Use ffcast<float> to cast from double to float.
 

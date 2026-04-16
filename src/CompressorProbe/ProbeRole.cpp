@@ -107,5 +107,23 @@ void ProbeRole::on_generator_id_decoded(int id)
         return;
     }
     pipe = MOVE(p);
+    pipe->on_message_received = [this](span<const char> memory_block) {
+        on_pipe_message_received(memory_block);
+    };
     common_state.generator_id = id;
+}
+
+void ProbeRole::on_pipe_message_received(span<const char> memory_block)
+{
+    auto a = common_state.file_log_sink->activate();
+
+    auto response_or = response_from_span(memory_block);
+    if (!response_or) {
+        LOG(ERROR) << format("ProbeRole::on_pipe_message_received: {}", response_or.error());
+        return;
+    }
+    auto& response = *response_or;
+    if (pending_command && response.command_index == command_index(*pending_command)) {
+        LOG(INFO) << format("Pending command response received, command_index: {}", response.command_index);
+    }
 }

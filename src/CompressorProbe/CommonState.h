@@ -18,4 +18,7 @@ struct CommonState {
     optional<int> generator_id;
     optional<PreparedToPlay> prepared_to_play;
     optional<string> error;
+
+    // For audio thread.
+    int next_process_block_index = 0;
 };

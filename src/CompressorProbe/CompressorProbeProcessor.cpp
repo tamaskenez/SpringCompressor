@@ -48,6 +48,7 @@ void CompressorProbeProcessor::prepareToPlay(double sample_rate, int samples_per
     }
     CHECK(!common_state.prepared_to_play);
     common_state.prepared_to_play = {sample_rate, samples_per_block};
+    common_state.next_process_block_index = 0;
 }
 
 void CompressorProbeProcessor::releaseResources()
@@ -75,6 +76,7 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     } else {
         buffer.clear();
     }
+    ++common_state.next_process_block_index;
 }
 
 juce::AudioProcessorEditor* CompressorProbeProcessor::createEditor()

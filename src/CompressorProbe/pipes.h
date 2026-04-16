@@ -14,7 +14,7 @@ public:
     static unique_ptr<Pipe> connect(int id, FileLogSink& file_log_sink);
     static unique_ptr<Pipe> create_new(int id, FileLogSink& file_log_sink);
 
-    function<void(const Command::V&)> on_command;
+    function<void(span<const char> memory_block)> on_message_received;
 
     explicit Pipe(FileLogSink& file_log_sink_arg);
     ~Pipe() override;
