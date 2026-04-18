@@ -46,8 +46,9 @@ private:
 
     // Audio thread variables and functions
     vector<float> tone_buf;
-    int tone_playhead = 0;
+    unsigned tone_playhead = 0;
     optional<Command> current_command;
+    DecibelCycleLoopGenerator decibel_cycle_loop_generator;
 
     // Thread-safe communication between audio and message threads
     moodycamel::ReaderWriterQueue<Command> message_to_audio_queue;

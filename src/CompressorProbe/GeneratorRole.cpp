@@ -52,6 +52,7 @@ vector<float> build_tone_buffer(uint16_t id)
 
 GeneratorRole::GeneratorRole(CommonState& common_state_arg)
     : common_state(common_state_arg)
+    , decibel_cycle_loop_generator(1.0)
 {
     auto [new_id, new_pipe] = create_id_and_pipe(*common_state.file_log_sink);
     if (!new_pipe) {
@@ -73,9 +74,10 @@ GeneratorRole::GeneratorRole(CommonState& common_state_arg)
 GeneratorRole::~GeneratorRole() = default;
 
 // Might be called on audio thread, but strictly before process_block.
-void GeneratorRole::prepare_to_play(double /*sample_rate*/, int /*samples_per_block*/)
+void GeneratorRole::prepare_to_play(double sample_rate, int /*samples_per_block*/)
 {
     tone_playhead = 0;
+    decibel_cycle_loop_generator = DecibelCycleLoopGenerator(sample_rate);
 }
 
 void GeneratorRole::release_resources()
@@ -100,7 +102,10 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
             .effective_from_process_block_index = common_state.next_process_block_index
           }
         );
+        tone_playhead = 0;
     }
+    const unsigned N = sucast(buffer.getNumSamples());
+    CHECK(buffer.getNumChannels() == 1 || buffer.getNumChannels() == 2);
     switch (status.load()) {
     case GeneratorStatus::Idle:
         buffer.clear();
@@ -116,9 +121,18 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
         }
     } break;
     case GeneratorStatus::Connected:
-        // TODO generate audio according to `current_command`
-        buffer.clear();
-        break;
+        switch (enum_of(current_command->mode)) {
+        case Mode::E::Bypass:
+            // TODO add high frequency GR track signal.
+            break;
+        EVARIANT_CASE(current_command->mode, Mode, DecibelCycle, x) {
+            decibel_cycle_loop_generator.generate_block(x, tone_playhead, span(buffer.getArrayOfWritePointers()[0], N));
+            tone_playhead = (tone_playhead + N) % decibel_cycle_loop_generator.cycle_length_samples;
+            if (buffer.getNumChannels() == 2) {
+                std::copy_n(buffer.getArrayOfWritePointers()[1], N, buffer.getArrayOfWritePointers()[0]);
+            }
+        } break;
+        }
     }
 }
 

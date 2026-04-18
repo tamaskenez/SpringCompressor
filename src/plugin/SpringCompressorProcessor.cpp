@@ -427,42 +427,48 @@ void SpringCompressorProcessor::on_ui_refresh_timer_elapsed()
     bool rms_matrix_updated = false;
     while (audio_to_ui_queue.try_dequeue(msg)) {
         switch (enum_of(msg)) {
-        EVARIANT_CASE2(msg, AudioToUIMsg, TransferCurveState, tcs) {
-            editor_set_transfer_curve(tcs);
-        } break;
-        EVARIANT_CASE2(msg, AudioToUIMsg, RmsSamples, rms_samples) {
-            rms_matrix_updated |= !rms_samples.samples.empty();
-            for (auto rs : rms_samples.samples) {
-                const auto input_db = matlab::mag2db(rs[0]);
-                const auto output_db = matlab::mag2db(rs[1]);
-                if (in_cc_range(input_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1)
-                    && in_cc_range(
-                      output_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1
-                    )) {
-                    const auto db_to_index = [](float db) {
-                        constexpr int M = 1;
-                        const int db_int = iround<int>(db);
-                        return db_int - modulo(db_int, M) - TransferCurveComponent::k_db_min;
-                    };
-                    const auto xy = AI2{db_to_index(input_db), db_to_index(output_db)};
-                    if (in_co_range(xy[0], 0, k_rms_matrix_size) && in_co_range(xy[1], 0, k_rms_matrix_size)) {
-                        rms_matrix_as_mdspan[xy[0], xy[1]] = rms_matrix_clock;
-                    }
-                }
-                ++rms_matrix_clock;
+            EVARIANT_CASE2(msg, AudioToUIMsg, TransferCurveState, tcs)
+            {
+                editor_set_transfer_curve(tcs);
             }
-            // Maintenance: periodically decrease all timestamps and the clock to prevent overflow.
-            if (rms_matrix_clock >= k_max_rms_dot_age_ticks) {
-                for (auto& x : rms_matrix) {
-                    if (x < 0) {
-                        x = INT_MIN;
-                    } else {
-                        x -= rms_matrix_clock;
+            break;
+            EVARIANT_CASE2(msg, AudioToUIMsg, RmsSamples, rms_samples)
+            {
+                rms_matrix_updated |= !rms_samples.samples.empty();
+                for (auto rs : rms_samples.samples) {
+                    const auto input_db = matlab::mag2db(rs[0]);
+                    const auto output_db = matlab::mag2db(rs[1]);
+                    if (in_cc_range(
+                          input_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1
+                        )
+                        && in_cc_range(
+                          output_db, TransferCurveComponent::k_db_min - 1, TransferCurveComponent::k_db_max + 1
+                        )) {
+                        const auto db_to_index = [](float db) {
+                            constexpr int M = 1;
+                            const int db_int = iround<int>(db);
+                            return db_int - modulo(db_int, M) - TransferCurveComponent::k_db_min;
+                        };
+                        const auto xy = AI2{db_to_index(input_db), db_to_index(output_db)};
+                        if (in_co_range(xy[0], 0, k_rms_matrix_size) && in_co_range(xy[1], 0, k_rms_matrix_size)) {
+                            rms_matrix_as_mdspan[xy[0], xy[1]] = rms_matrix_clock;
+                        }
                     }
+                    ++rms_matrix_clock;
                 }
-                rms_matrix_clock = 0;
+                // Maintenance: periodically decrease all timestamps and the clock to prevent overflow.
+                if (rms_matrix_clock >= k_max_rms_dot_age_ticks) {
+                    for (auto& x : rms_matrix) {
+                        if (x < 0) {
+                            x = INT_MIN;
+                        } else {
+                            x -= rms_matrix_clock;
+                        }
+                    }
+                    rms_matrix_clock = 0;
+                }
             }
-        } break;
+            break;
         }
     }
     if (rms_matrix_updated) {
