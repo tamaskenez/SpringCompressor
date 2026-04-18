@@ -34,20 +34,26 @@ void CompressorProbeProcessor::on_ui_refresh_timer_elapsed()
     if (auto e = get_active_editor()) {
         e->refresh_ui();
     }
+    if (role_impl) {
+        role_impl->on_ui_refresh_timer_elapsed();
+    }
 }
 
 void CompressorProbeProcessor::prepareToPlay(double sample_rate, int samples_per_block)
 {
+    const auto num_channels = getTotalNumInputChannels();
+    CHECK(getTotalNumOutputChannels() == num_channels);
+
     auto a = file_log_sink->activate();
 
     common_state.generator_id.reset();
+    CHECK(!common_state.prepared_to_play);
+    common_state.prepared_to_play = {sample_rate, samples_per_block, num_channels};
     if (common_state.role) {
         CHECK(role_impl);
         role_impl->prepare_to_play(sample_rate, samples_per_block);
         role_impl_for_audio_thread = role_impl.get();
     }
-    CHECK(!common_state.prepared_to_play);
-    common_state.prepared_to_play = {sample_rate, samples_per_block};
     common_state.next_process_block_index = 0;
 }
 
@@ -115,6 +121,13 @@ void CompressorProbeProcessor::on_role_selected_by_user(Role new_role)
     }
 }
 
+void CompressorProbeProcessor::on_mode_changed(Mode::E mode)
+{
+    auto* p = dynamic_cast<ProbeRole*>(role_impl.get());
+    CHECK(p);
+    p->on_mode_changed(mode);
+}
+
 std::pair<GeneratorStatus, std::optional<std::string>> CompressorProbeProcessor::get_generator_status() const
 {
     CHECK(common_state.role == Role::Generator);
@@ -126,6 +139,12 @@ std::pair<GeneratorStatus, std::optional<std::string>> CompressorProbeProcessor:
 CompressorProbeEditor* CompressorProbeProcessor::get_active_editor() const
 {
     return dynamic_cast<CompressorProbeEditor*>(this->getActiveEditor());
+}
+
+const ProbeRoleState* CompressorProbeProcessor::get_probe_state() const
+{
+    CHECK(common_state.role == Role::Probe);
+    return dynamic_cast<const ProbeRole*>(role_impl.get())->get_state();
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

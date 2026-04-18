@@ -29,7 +29,9 @@ private:
 class CompressorProbeEditor : public juce::AudioProcessorEditor
 {
 public:
-    CompressorProbeEditor(juce::AudioProcessor& p, ProcessorInterface* event_target, const CommonState& common_state);
+    CompressorProbeEditor(
+      juce::AudioProcessor& p, ProcessorInterface* processor_interface, const CommonState& common_state
+    );
     ~CompressorProbeEditor() override = default;
 
     void paint(juce::Graphics&) override;
@@ -44,7 +46,8 @@ private:
     ProcessorInterface* processor_interface;
     const CommonState& common_state;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
-    juce::Label title_label, mode_label, error_label;
+    juce::Label title_label, role_label, error_label;
+    juce::ComboBox mode;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeEditor)
 };

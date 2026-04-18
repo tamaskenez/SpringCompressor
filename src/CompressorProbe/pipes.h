@@ -16,14 +16,20 @@ public:
 
     function<void(span<const char> memory_block)> on_message_received;
 
-    explicit Pipe(FileLogSink& file_log_sink_arg);
+    Pipe(string name_arg, FileLogSink& file_log_sink_arg);
     ~Pipe() override;
+
+    const string& get_name() const
+    {
+        return name;
+    }
 
     void connectionMade() override;
     void connectionLost() override;
     void messageReceived(const juce::MemoryBlock&) override;
-    bool send_command(const Command::V& cmd);
+    bool send_message(span<const char> memory_block);
 
 private:
+    string name;
     FileLogSink& file_log_sink;
 };

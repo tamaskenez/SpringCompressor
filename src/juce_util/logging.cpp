@@ -18,11 +18,11 @@ thread_local size_t s_active_instance_index = k_fallback_instance_index;
 class StaticFileLogSink : public absl::LogSink
 {
 public:
-    StaticFileLogSink()
+    explicit StaticFileLogSink(const string& subdirectory_name)
     {
         // Add a fallback log file which will be used when the active instance is not set.
         auto juce_file_logger = std::unique_ptr<juce::FileLogger>(juce::FileLogger::createDateStampedLogger(
-          juce::FileLogger::getSystemLogFileFolder().getChildFile("juce_logging").getFullPathName(),
+          juce::FileLogger::getSystemLogFileFolder().getChildFile(subdirectory_name).getFullPathName(),
           "fallback_instance",
           ".txt",
           "BEGIN LOG FOR MESSAGES WHEN INSTANCE IS NOT SET"
@@ -30,6 +30,8 @@ public:
         instance_to_index.emplace(nullptr, k_fallback_instance_index);
         instance_log_paths[k_fallback_instance_index] =
           juce_file_logger->getLogFile().getFullPathName().toUTF8().getAddress();
+        std::error_code ec;
+        fs::remove(instance_log_paths[k_fallback_instance_index], ec);
 
         absl::InitializeLog();
         absl::AddLogSink(this);
@@ -44,7 +46,7 @@ public:
             assert(false);
             return;
         }
-        const auto& path = instance_log_paths[s_active_instance_index];
+        auto& path = instance_log_paths[s_active_instance_index];
         if (path.empty()) {
             assert(false);
             return;
@@ -106,9 +108,11 @@ private:
     array<string, k_max_instances> instance_log_paths;
 };
 
-StaticFileLogSink& get_static_file_log_sink()
+// Note that the very first call will determine the subdirectory_name which is supposed to be the company which
+// should not change after the first call. In subsequent calls the parameter will be ignored.
+StaticFileLogSink& get_static_file_log_sink(const string& subdirectory_name = "juce_logging")
 {
-    static absl::NoDestructor<StaticFileLogSink> sink;
+    static absl::NoDestructor<StaticFileLogSink> sink(subdirectory_name);
     return *sink;
 }
 
@@ -125,9 +129,8 @@ FileLogSink::FileLogSink(
       ".txt",
       format("BEGIN LOG FOR INSTANCE {}", instance)
     ));
-    instance_index = get_static_file_log_sink().add_instance(
-      instance, juce_file_logger->getLogFile().getFullPathName().toUTF8().getAddress()
-    );
+    instance_index = get_static_file_log_sink(subdirectory_name)
+                       .add_instance(instance, juce_file_logger->getLogFile().getFullPathName().toUTF8().getAddress());
 }
 
 FileLogSink::~FileLogSink()

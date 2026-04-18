@@ -31,6 +31,7 @@ target_link_libraries(CompressorProbe
         juce_util
         abseil::abseil
         magic_enum::magic_enum
+        readerwriterqueue::readerwriterqueue
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

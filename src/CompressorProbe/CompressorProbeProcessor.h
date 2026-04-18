@@ -66,20 +66,26 @@ public:
     }
     void changeProgramName(int, const juce::String&) override {}
 
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override
-    {
-        return layouts.getMainInputChannelSet() == layouts.getMainOutputChannelSet()
-            && !layouts.getMainInputChannelSet().isDisabled();
-    }
-
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+protected:
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override
+    {
+        auto in = layouts.getMainInputChannelSet();
+        auto out = layouts.getMainOutputChannelSet();
+        return in == out && (in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo());
+    }
+
+public:
     void on_ui_refresh_timer_elapsed();
     CompressorProbeEditor* get_active_editor() const;
 
     // ProcessorInterface functions
     void on_role_selected_by_user(Role role) override;
+    void on_mode_changed(Mode::E mode) override;
+    const ProbeRoleState* get_probe_state() const override;
+
     std::pair<GeneratorStatus, std::optional<std::string>> get_generator_status() const override;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)

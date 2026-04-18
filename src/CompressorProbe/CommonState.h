@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modes.h"
 #include "Role.h"
 #include "juce_util/logging.h"
 
@@ -10,6 +11,7 @@ struct CommonState {
     struct PreparedToPlay {
         double sample_rate;
         int samples_per_block;
+        int num_channels;
     };
 
     shared_ptr<monostate> token = make_shared<monostate>();

@@ -5,6 +5,7 @@
 #include "ProbeProtocol.h"
 #include "pipes.h"
 
+#include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
 
 namespace
@@ -69,16 +70,37 @@ GeneratorRole::GeneratorRole(CommonState& common_state_arg)
     status.store(GeneratorStatus::TransmittingId);
 }
 
+GeneratorRole::~GeneratorRole() = default;
+
 // Might be called on audio thread, but strictly before process_block.
 void GeneratorRole::prepare_to_play(double /*sample_rate*/, int /*samples_per_block*/)
 {
     tone_playhead = 0;
 }
 
-void GeneratorRole::release_resources() {}
+void GeneratorRole::release_resources()
+{
+    status.store(GeneratorStatus::Idle);
+}
 
 void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi_messages*/)
 {
+    bool got_new_command = false;
+    {
+        Command cmd(nullopt);
+        while (message_to_audio_queue.try_dequeue(cmd)) {
+            current_command = cmd;
+            got_new_command = true;
+        }
+    }
+    if (got_new_command) {
+        audio_to_message_queue.enqueue(
+          Response{
+            .command_index = current_command->command_index,
+            .effective_from_process_block_index = common_state.next_process_block_index
+          }
+        );
+    }
     switch (status.load()) {
     case GeneratorStatus::Idle:
         buffer.clear();
@@ -94,6 +116,7 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
         }
     } break;
     case GeneratorStatus::Connected:
+        // TODO generate audio according to `current_command`
         buffer.clear();
         break;
     }
@@ -109,15 +132,18 @@ void GeneratorRole::on_pipe_message_received(span<const char> memory_block)
         return;
     }
 
+    status.store(GeneratorStatus::Connected);
+
     auto& cmd = *cmd_or;
-    switch (enum_of(cmd)) {
-    case Command::E::Stop:
-        LOG(INFO) << "GeneratorRole::on_pipe_message_received: Stop";
-        status.store(GeneratorStatus::Connected);
-        break;
-    EVARIANT_CASE2(cmd, Command, DecibelCycle, x) {
-        LOG(INFO) << format("GeneratorRole::on_pipe_message_received: DecibelCycle: {}", x.to_string());
-        // todo
-    } break;
+    last_command_received =
+      format("Received command#{}: {}", cmd.command_index, magic_enum::enum_name(enum_of(cmd.mode)));
+    message_to_audio_queue.enqueue(cmd);
+}
+
+void GeneratorRole::on_ui_refresh_timer_elapsed()
+{
+    Response response;
+    while (audio_to_message_queue.try_dequeue(response)) {
+        pipe->send_message(response_as_span(response));
     }
 }

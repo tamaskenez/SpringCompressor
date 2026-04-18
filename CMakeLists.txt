@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.31)
 project(SpringCompressor VERSION 0.1.0)
 
+# Conan 2.x CMakeDeps creates per-config targets (CONAN_LIB::*_RELEASE/_DEBUG) with only
+# IMPORTED_LOCATION_<CONFIG> set. CMake 4.x validates all imported targets at configure
+# time, erroring on missing locations for other configs. Setting CMP0111 OLD turns this
+# back into a warning — Conan's config files select the correct variant at link time.
+cmake_policy(SET CMP0111 OLD)
+
 if(NOT CMAKE_PREFIX_PATH)
     set(CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/_d")
 endif()
