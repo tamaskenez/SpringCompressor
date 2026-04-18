@@ -32,6 +32,8 @@ struct DecibelCycle {
 EVARIANT_DECLARE_E_V(Bypass, DecibelCycle)
 } // namespace Mode
 
+string_view get_label_for_enum(Mode::E e);
+
 struct DecibelCycleLoopGenerator {
     double fs = NAN;
     Mode::DecibelCycle params;

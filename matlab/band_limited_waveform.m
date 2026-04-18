@@ -22,3 +22,16 @@ function y = band_limited_waveform(period_samples, even_harmonics, amp_exp, dpha
         y = y + k^amp_exp * cos(2*pi * k * n / N + phase);
     end
 end
+
+% plot(band_limited_waveform(100, false, -1000, 0)); % 1.41, Sine
+% plot(band_limited_waveform(100, false, -1, 0));    % 3.31
+% plot(band_limited_waveform(100, false, -1, pi/2)); % 1.18 Square
+% plot(band_limited_waveform(100, false, -2, 0));    % 1.72 Triangle
+% plot(band_limited_waveform(100, false, -2, pi/2)); % 1.29
+% plot(band_limited_waveform(100, true, -1, 0));     % 4.99
+% plot(band_limited_waveform(100, true, -1, pi/2));  % 2.02 Sawtooth
+% plot(band_limited_waveform(100, true, -2, 0));     % 2.21
+% plot(band_limited_waveform(100, true, -2, pi/2));  % 1.38
+%
+% y = band_limited_waveform(100, false, -1, 0);
+% crest = max(abs(y)) / sqrt(mean(y.^2))

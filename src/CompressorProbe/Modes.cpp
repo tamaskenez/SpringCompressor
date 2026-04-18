@@ -107,3 +107,14 @@ double DecibelCycleLoopGenerator::decibel_for_sample_ix(unsigned sample_ix) cons
 {
     return std::lerp(max_dbfs, min_dbfs, abs(2.0 * sample_ix / cycle_length_samples - 1.0));
 }
+
+string_view get_label_for_enum(Mode::E e)
+{
+    using std::literals::operator""sv;
+    switch (e) {
+    case Mode::E::Bypass:
+        return "Bypass plus GR tracker signal"sv;
+    case Mode::E::DecibelCycle:
+        return "Steady state compression curve"sv;
+    }
+}

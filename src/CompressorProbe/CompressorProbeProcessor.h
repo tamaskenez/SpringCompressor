@@ -18,6 +18,7 @@ class FileLogSink;
 class CompressorProbeProcessor
     : public juce::AudioProcessor
     , public ProcessorInterface
+    , private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     CompressorProbeProcessor();
@@ -88,9 +89,14 @@ public:
 
     std::pair<GeneratorStatus, std::optional<std::string>> get_generator_status() const override;
 
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::AudioProcessorValueTreeState apvts;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)
 
 private:
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
+
     unique_ptr<FileLogSink> file_log_sink;
     CommonState common_state;
     unique_ptr<RoleInterface> role_impl;

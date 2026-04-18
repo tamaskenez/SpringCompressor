@@ -8,6 +8,64 @@
 namespace
 {
 constexpr int k_ui_refresh_timer_ms = 33;
+
+enum class ParameterID {
+    mode,
+    steady_curve_freq,
+    steady_curve_waveform,
+    steady_curve_level_method,
+    steady_curve_min_dbfs,
+    steady_curve_max_dbfs,
+    steady_curve_length,
+};
+
+template<class E>
+juce::StringArray get_enum_names_in_StringArray()
+{
+    juce::StringArray labels;
+    for (auto [_, n] : magic_enum::enum_entries<E>()) {
+        labels.add(juce::String(n.data(), n.size()));
+    }
+    return labels;
+}
+
+template<class E>
+juce::StringArray get_labels_for_enum_in_StringArray()
+{
+    juce::StringArray labels;
+    for (auto [e, _] : magic_enum::enum_entries<E>()) {
+        auto sv = get_label_for_enum(e);
+        labels.add(juce::String(sv.data(), sv.size()));
+    }
+    return labels;
+}
+} // namespace
+
+juce::AudioProcessorValueTreeState::ParameterLayout CompressorProbeProcessor::createParameterLayout()
+{
+    return {
+      make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"mode", 1}, "Mode", get_labels_for_enum_in_StringArray<Mode::E>(), 0
+      ),
+      make_unique<juce::AudioParameterInt>(juce::ParameterID{"steady_curve_freq", 1}, "Freq", 20, 10000, 1000),
+      make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"steady_curve_waveform", 1},
+        "Waveform",
+        juce::StringArray{"sine", "square", "hi-crest-square"},
+        0
+      ),
+      make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"steady_curve_level_method", 1}, "Level Method", juce::StringArray{"peak", "rms"}, 0
+      ),
+      make_unique<juce::AudioParameterInt>(juce::ParameterID{"steady_curve_min_dbfs", 1}, "Min dBFS", -60, 0, -60),
+      make_unique<juce::AudioParameterInt>(juce::ParameterID{"steady_curve_max_dbfs", 1}, "Max dBFS", -50, 0, -6),
+      make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"steady_curve_length", 1},
+        "Length",
+        juce::StringArray{"500 ms", "1000 ms", "2000 ms", "4000 ms", "8000 ms"},
+        2
+      ),
+    };
 }
 
 CompressorProbeProcessor::CompressorProbeProcessor()
@@ -16,6 +74,7 @@ CompressorProbeProcessor::CompressorProbeProcessor()
           .withInput("Input", juce::AudioChannelSet::stereo(), true)
           .withOutput("Output", juce::AudioChannelSet::stereo(), true)
       )
+    , apvts(*this, nullptr, "Parameters", createParameterLayout())
     , file_log_sink(make_unique<FileLogSink>(this, JucePlugin_Manufacturer, format("{}-", JucePlugin_Name)))
     , ui_refresh_timer([this]() {
         on_ui_refresh_timer_elapsed();
@@ -24,9 +83,17 @@ CompressorProbeProcessor::CompressorProbeProcessor()
 {
     common_state.file_log_sink = file_log_sink.get();
     ui_refresh_timer.startTimer(k_ui_refresh_timer_ms);
+    for (const auto& id : get_enum_names_in_StringArray<ParameterID>()) {
+        apvts.addParameterListener(id, this);
+    }
 }
 
-CompressorProbeProcessor::~CompressorProbeProcessor() = default;
+CompressorProbeProcessor::~CompressorProbeProcessor()
+{
+    for (const auto& id : get_enum_names_in_StringArray<ParameterID>()) {
+        apvts.removeParameterListener(id, this);
+    }
+}
 
 void CompressorProbeProcessor::on_ui_refresh_timer_elapsed()
 {
@@ -87,12 +154,31 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
 juce::AudioProcessorEditor* CompressorProbeProcessor::createEditor()
 {
-    return new CompressorProbeEditor(*this, this, common_state);
+    return new CompressorProbeEditor(*this, apvts, this, common_state);
 }
 
-void CompressorProbeProcessor::getStateInformation(juce::MemoryBlock& /*destData*/) {}
+void CompressorProbeProcessor::getStateInformation(juce::MemoryBlock& destData)
+{
+    auto state = apvts.copyState();
+    if (auto xml = state.createXml()) {
+        copyXmlToBinary(*xml, destData);
+    }
+}
 
-void CompressorProbeProcessor::setStateInformation(const void* /*data*/, int /*sizeInBytes*/) {}
+void CompressorProbeProcessor::setStateInformation(const void* data, int sizeInBytes)
+{
+    if (auto xml = getXmlFromBinary(data, sizeInBytes)) {
+        if (xml->hasTagName(apvts.state.getType())) {
+            apvts.replaceState(juce::ValueTree::fromXml(*xml));
+        }
+    }
+}
+
+void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id, float new_value)
+{
+    (void)parameter_id;
+    (void)new_value;
+}
 
 void CompressorProbeProcessor::on_role_selected_by_user(Role new_role)
 {

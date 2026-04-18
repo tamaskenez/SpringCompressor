@@ -2,6 +2,7 @@
 
 #include "GeneratorStatus.h"
 #include "Role.h"
+#include "juce_util/misc.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -30,7 +31,10 @@ class CompressorProbeEditor : public juce::AudioProcessorEditor
 {
 public:
     CompressorProbeEditor(
-      juce::AudioProcessor& p, ProcessorInterface* processor_interface, const CommonState& common_state
+      juce::AudioProcessor& p,
+      juce::AudioProcessorValueTreeState& apvts,
+      ProcessorInterface* processor_interface,
+      const CommonState& common_state
     );
     ~CompressorProbeEditor() override = default;
 
@@ -47,7 +51,15 @@ private:
     const CommonState& common_state;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
     juce::Label title_label, role_label, error_label;
-    juce::ComboBox mode;
+    ComboBoxWithAttachment mode;
+
+    juce::Label sc_freq_label, sc_waveform_label, sc_level_method_label;
+    juce::Label sc_min_dbfs_label, sc_max_dbfs_label, sc_length_label;
+    juce::Slider sc_freq_slider, sc_min_dbfs_slider, sc_max_dbfs_slider;
+    juce::AudioProcessorValueTreeState::SliderAttachment sc_freq_attachment;
+    juce::AudioProcessorValueTreeState::SliderAttachment sc_min_dbfs_attachment;
+    juce::AudioProcessorValueTreeState::SliderAttachment sc_max_dbfs_attachment;
+    ComboBoxWithAttachment sc_waveform, sc_level_method, sc_length;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeEditor)
 };
