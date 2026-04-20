@@ -27,7 +27,6 @@ public:
     // same length.
     void update(span<const float> samples_in, span<const float> samples_out);
 
-private:
     juce::Image waveform_image;
     ComboBoxWithAttachment channels, y_unit;
     juce::ToggleButton auto_scale_btn{"Auto scale"};

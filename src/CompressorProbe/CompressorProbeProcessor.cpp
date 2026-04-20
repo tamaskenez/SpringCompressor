@@ -151,6 +151,25 @@ void CompressorProbeProcessor::releaseResources()
     role_impl_for_audio_thread = nullptr;
 }
 
+void CompressorProbeProcessor::numChannelsChanged()
+{
+    juce::MessageManager::callAsync([this] {
+        update_channels_on_editor();
+    });
+}
+
+void CompressorProbeProcessor::update_channels_on_editor(CompressorProbeEditor* e_arg)
+{
+    const auto ni = getTotalNumInputChannels();
+    const auto no = getTotalNumOutputChannels();
+    CHECK(ni == no);
+    if (common_state.role == Role::Probe) {
+        if (auto* e = e_arg ? e_arg : get_active_editor()) {
+            e->enable_channels(ni != 1);
+        }
+    }
+}
+
 void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages)
 {
     juce::ScopedNoDenormals no_denormals;
@@ -165,7 +184,9 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
 juce::AudioProcessorEditor* CompressorProbeProcessor::createEditor()
 {
-    return new CompressorProbeEditor(*this, apvts, this, common_state);
+    auto* p = new CompressorProbeEditor(*this, apvts, this, common_state);
+    update_channels_on_editor(p);
+    return p;
 }
 
 void CompressorProbeProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -233,6 +254,7 @@ void CompressorProbeProcessor::on_role_selected_by_user(Role new_role)
         );
         role_impl_for_audio_thread = role_impl.get();
     }
+    update_channels_on_editor();
     if (auto e = get_active_editor()) {
         e->refresh_ui();
     }

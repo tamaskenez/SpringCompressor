@@ -44,6 +44,8 @@ public:
 
     void refresh_ui();
 
+    void enable_channels(bool enable);
+
 private:
     void refresh_generator_ui();
     void refresh_probe_ui();

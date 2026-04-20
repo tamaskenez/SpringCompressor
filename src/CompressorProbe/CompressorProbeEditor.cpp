@@ -111,6 +111,11 @@ CompressorProbeEditor::CompressorProbeEditor(
     setSize(400, 300);
 }
 
+void CompressorProbeEditor::enable_channels(bool b)
+{
+    wave_scope.channels.combo.setEnabled(b);
+}
+
 void CompressorProbeEditor::refresh_ui()
 {
     if (auto role = common_state.role) {

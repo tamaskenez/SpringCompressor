@@ -36,6 +36,7 @@ public:
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
+    void numChannelsChanged() override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     double getTailLengthSeconds() const override
@@ -96,6 +97,8 @@ protected:
     }
 
 private:
+    void update_channels_on_editor(CompressorProbeEditor* e = nullptr);
+
     juce::AudioProcessorValueTreeState apvts;
 
     Mode::E get_mode() const;
