@@ -93,9 +93,11 @@ CompressorProbeEditor::CompressorProbeEditor(
     , processor_interface(processor_interface_arg)
     , common_state(common_state_arg)
     , mode(apvts, "mode", choices_for(apvts, "mode"))
+    , wave_scope(apvts)
 {
     decibel_cycle_panel = make_unique<DecibelCyclePanel>(apvts);
     addChildComponent(*decibel_cycle_panel);
+    addChildComponent(wave_scope);
 
     if (!common_state.role) {
         role_overlay = std::make_unique<RoleSelectionOverlay>();
@@ -136,9 +138,11 @@ void CompressorProbeEditor::refresh_ui()
         switch (*role) {
         case Role::Generator:
             refresh_generator_ui();
+            setSize(400, 300);
             break;
         case Role::Probe:
             refresh_probe_ui();
+            setSize(800, 600);
             break;
         }
         resized();
@@ -184,6 +188,15 @@ void CompressorProbeEditor::refresh_probe_ui()
 
     const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
     decibel_cycle_panel->setVisible(is_decibel_cycle);
+    wave_scope.setVisible(true);
+
+    const unsigned N = 100;
+    vector<float> samples_in(N), samples_out(N);
+    for (unsigned i = 0; i < N; ++i) {
+        samples_in[i] = std::lerp(-1.0f, 1.0f, ifcast<float>(i) / N);
+        samples_out[i] = std::lerp(0.5f, -0.5f, ifcast<float>(i) / N);
+    }
+    wave_scope.update(samples_in, samples_out);
 }
 
 void CompressorProbeEditor::paint(juce::Graphics& g)
@@ -200,24 +213,31 @@ void CompressorProbeEditor::resized()
 
     auto area = getLocalBounds().reduced(8, 0);
 
-    // Error label pinned to the bottom.
-    if (common_state.error) {
+    if (common_state.role == Role::Generator && common_state.error) {
         area.removeFromBottom(8);
         error_label.setBounds(area.removeFromBottom(40));
     }
 
     area.removeFromTop(8);
-
-    // Title and role label side by side at the top.
     auto top_row = area.removeFromTop(24);
     title_label.setBounds(top_row.removeFromLeft(top_row.getWidth() / 3));
     role_label.setBounds(top_row);
 
     if (common_state.role == Role::Probe) {
-        area.removeFromTop(4);
-        mode.combo.setBounds(area.removeFromTop(24));
-        if (decibel_cycle_panel->isVisible()) {
-            decibel_cycle_panel->setBounds(area);
+        if (common_state.error) {
+            area.removeFromTop(4);
+            error_label.setBounds(area.removeFromTop(20));
         }
+
+        auto left = area.removeFromLeft(area.getWidth() / 2);
+        area.removeFromLeft(8);
+
+        left.removeFromTop(4);
+        mode.combo.setBounds(left.removeFromTop(24));
+        if (decibel_cycle_panel->isVisible()) {
+            decibel_cycle_panel->setBounds(left);
+        }
+
+        wave_scope.setBounds(area);
     }
 }

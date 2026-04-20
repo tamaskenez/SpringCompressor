@@ -20,7 +20,7 @@ class GeneratorRole;
 class CompressorProbeProcessor
     : public juce::AudioProcessor
     , public ProcessorInterface
-    , private juce::AudioProcessorValueTreeState::Listener
+    , juce::AudioProcessorValueTreeState::Listener
 {
     friend class ProbeRole;
     friend class GeneratorRole;
@@ -75,6 +75,18 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    void on_ui_refresh_timer_elapsed();
+    CompressorProbeEditor* get_active_editor() const;
+
+    // ProcessorInterface functions
+    void on_role_selected_by_user(Role role) override;
+    void on_mode_changed(Mode::E mode) override;
+    const ProbeRoleState* get_probe_state() const override;
+    std::pair<GeneratorStatus, std::optional<std::string>> get_generator_status() const override;
+
+    // AudioProcessorValueTreeState::Listener
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
+
 protected:
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override
     {
@@ -83,24 +95,9 @@ protected:
         return in == out && (in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo());
     }
 
-public:
-    void on_ui_refresh_timer_elapsed();
-    CompressorProbeEditor* get_active_editor() const;
-
-    // ProcessorInterface functions
-    void on_role_selected_by_user(Role role) override;
-    void on_mode_changed(Mode::E mode) override;
-    const ProbeRoleState* get_probe_state() const override;
-
-    std::pair<GeneratorStatus, std::optional<std::string>> get_generator_status() const override;
-
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+private:
     juce::AudioProcessorValueTreeState apvts;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)
-
-private:
-    void parameterChanged(const juce::String& parameterID, float newValue) override;
     Mode::E get_mode() const;
 
     unique_ptr<FileLogSink> file_log_sink;
@@ -109,4 +106,6 @@ private:
     JuceTimer ui_refresh_timer;
 
     std::atomic<RoleInterface*> role_impl_for_audio_thread;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)
 };

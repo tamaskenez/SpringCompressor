@@ -18,6 +18,9 @@ enum class ParameterID {
     steady_curve_min_dbfs,
     steady_curve_max_dbfs,
     steady_curve_length,
+    channels,
+    y_unit,
+    auto_scale,
 };
 
 template<class E>
@@ -40,9 +43,8 @@ juce::StringArray get_labels_for_enum_in_StringArray()
     }
     return labels;
 }
-} // namespace
 
-juce::AudioProcessorValueTreeState::ParameterLayout CompressorProbeProcessor::createParameterLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 {
     return {
       make_unique<juce::AudioParameterChoice>(
@@ -66,8 +68,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout CompressorProbeProcessor::cr
         juce::StringArray{"500 ms", "1000 ms", "2000 ms", "4000 ms", "8000 ms"},
         2
       ),
+      make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"channels", 1}, "Channels", juce::StringArray{"left", "right", "(left+right)/2"}, 0
+      ),
+      make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"y_unit", 1}, "Y Unit", juce::StringArray{"linear", "dB"}, 0
+      ),
+      make_unique<juce::AudioParameterBool>(juce::ParameterID{"auto_scale", 1}, "Auto Scale", true),
     };
 }
+} // namespace
 
 CompressorProbeProcessor::CompressorProbeProcessor()
     : AudioProcessor(
@@ -194,6 +204,9 @@ void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id
     case ParameterID::steady_curve_min_dbfs:
     case ParameterID::steady_curve_max_dbfs:
     case ParameterID::steady_curve_length:
+    case ParameterID::channels:
+    case ParameterID::y_unit:
+    case ParameterID::auto_scale:
         break;
     }
 }

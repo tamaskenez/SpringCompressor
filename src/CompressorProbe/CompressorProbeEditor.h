@@ -2,6 +2,7 @@
 
 #include "DecibelCyclePanel.h"
 #include "Role.h"
+#include "WaveScope.h"
 #include "juce_util/misc.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -53,6 +54,7 @@ private:
     juce::Label title_label, role_label, error_label;
     ComboBoxWithAttachment mode;
     std::unique_ptr<DecibelCyclePanel> decibel_cycle_panel;
+    WaveScope wave_scope;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeEditor)
 };
