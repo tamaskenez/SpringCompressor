@@ -14,12 +14,17 @@
 class CompressorProbeEditor;
 class RoleInterface;
 class FileLogSink;
+class ProbeRole;
+class GeneratorRole;
 
 class CompressorProbeProcessor
     : public juce::AudioProcessor
     , public ProcessorInterface
     , private juce::AudioProcessorValueTreeState::Listener
 {
+    friend class ProbeRole;
+    friend class GeneratorRole;
+
 public:
     CompressorProbeProcessor();
     ~CompressorProbeProcessor() override;
@@ -96,6 +101,7 @@ public:
 
 private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
+    Mode::E get_mode() const;
 
     unique_ptr<FileLogSink> file_log_sink;
     CommonState common_state;

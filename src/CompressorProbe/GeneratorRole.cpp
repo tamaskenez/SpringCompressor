@@ -1,7 +1,7 @@
 #include "GeneratorRole.h"
 
 #include "Command.h"
-#include "CommonState.h"
+#include "CompressorProbeProcessor.h"
 #include "ProbeProtocol.h"
 #include "pipes.h"
 
@@ -50,13 +50,13 @@ vector<float> build_tone_buffer(uint16_t id)
 }
 } // namespace
 
-GeneratorRole::GeneratorRole(CommonState& common_state_arg)
-    : common_state(common_state_arg)
+GeneratorRole::GeneratorRole(CompressorProbeProcessor& processor_arg)
+    : processor(processor_arg)
     , decibel_cycle_loop_generator(1.0)
 {
-    auto [new_id, new_pipe] = create_id_and_pipe(*common_state.file_log_sink);
+    auto [new_id, new_pipe] = create_id_and_pipe(*processor.common_state.file_log_sink);
     if (!new_pipe) {
-        common_state.error = format(
+        processor.common_state.error = format(
           "Failed to find an available pipe name with ID 0-65535 (starting with \"{}\").", get_pipe_name_for_id(0)
         );
         return;
@@ -64,7 +64,7 @@ GeneratorRole::GeneratorRole(CommonState& common_state_arg)
     new_pipe->on_message_received = [this](span<const char> memory_block) {
         on_pipe_message_received(memory_block);
     };
-    common_state.generator_id = new_id;
+    processor.common_state.generator_id = new_id;
     pipe = MOVE(new_pipe);
 
     tone_buf = build_tone_buffer(iicast<uint16_t>(new_id));
@@ -99,7 +99,7 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
         audio_to_message_queue.enqueue(
           Response{
             .command_index = current_command->command_index,
-            .effective_from_process_block_index = common_state.next_process_block_index
+            .effective_from_process_block_index = processor.common_state.next_process_block_index
           }
         );
         tone_playhead = 0;
@@ -138,7 +138,7 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
 
 void GeneratorRole::on_pipe_message_received(span<const char> memory_block)
 {
-    auto a = common_state.file_log_sink->activate();
+    auto a = processor.common_state.file_log_sink->activate();
 
     auto cmd_or = command_from_span(memory_block);
     if (!cmd_or) {

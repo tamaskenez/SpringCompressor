@@ -10,7 +10,7 @@
 
 #include <array>
 
-struct CommonState;
+class CompressorProbeProcessor;
 
 struct ReceivedAudioBlock {
     std::atomic<bool> allocated_for_message_thread;
@@ -44,7 +44,7 @@ struct GoertzelFilter {
 class ProbeRole : public RoleInterface
 {
 public:
-    explicit ProbeRole(CommonState& common_state); // initialises Goertzel coefficients
+    explicit ProbeRole(CompressorProbeProcessor& processor_arg);
 
     void prepare_to_play(double sample_rate, int samples_per_block) override;
     void process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages) override;
@@ -61,9 +61,11 @@ public:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProbeRole)
 
 private:
+    CompressorProbeProcessor& processor;
+
     // Message thread variables and functions
-    CommonState& common_state;
     ProbeRoleState state;
+    int next_command_index = 1;
     void on_generator_id_decoded(int id);
     void on_pipe_message_received(span<const char> memory_block) const;
 

@@ -10,7 +10,7 @@
 // Commands from the Probe to the Generator
 struct Command {
     explicit Command(std::nullopt_t) {}
-    explicit Command(const Mode::V& mode_arg); // Uses the next command index, not thread-safe.
+    explicit Command(int command_index, const Mode::V& mode_arg);
     explicit Command(span<const char> memory_block);
 
     int command_index = -1;

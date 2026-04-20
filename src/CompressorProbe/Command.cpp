@@ -4,13 +4,8 @@
 
 #include <magic_enum/magic_enum.hpp>
 
-namespace
-{
-int s_next_command_index = 1;
-}
-
-Command::Command(const Mode::V& mode_arg)
-    : command_index(s_next_command_index++)
+Command::Command(int command_index_arg, const Mode::V& mode_arg)
+    : command_index(command_index_arg)
     , mode(mode_arg)
 {
 }

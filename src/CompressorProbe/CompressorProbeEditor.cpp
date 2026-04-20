@@ -1,14 +1,7 @@
 #include "CompressorProbeEditor.h"
 
 #include "CommonState.h"
-#include "ProbeRoleState.h"
 #include "ProcessorInterface.h"
-#include "juce_util/misc.h"
-
-static juce::StringArray choices_for(juce::AudioProcessorValueTreeState& apvts, const char* id)
-{
-    return dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(id))->choices;
-}
 
 // --- RoleSelectionOverlay ---
 
@@ -100,30 +93,10 @@ CompressorProbeEditor::CompressorProbeEditor(
     , processor_interface(processor_interface_arg)
     , common_state(common_state_arg)
     , mode(apvts, "mode", choices_for(apvts, "mode"))
-    , sc_freq_attachment(apvts, "steady_curve_freq", sc_freq_slider)
-    , sc_min_dbfs_attachment(apvts, "steady_curve_min_dbfs", sc_min_dbfs_slider)
-    , sc_max_dbfs_attachment(apvts, "steady_curve_max_dbfs", sc_max_dbfs_slider)
-    , sc_waveform(apvts, "steady_curve_waveform", choices_for(apvts, "steady_curve_waveform"))
-    , sc_level_method(apvts, "steady_curve_level_method", choices_for(apvts, "steady_curve_level_method"))
-    , sc_length(apvts, "steady_curve_length", choices_for(apvts, "steady_curve_length"))
 {
-    auto setup_sc_label = [](juce::Label& lbl, const juce::String& text) {
-        lbl.setText(text, juce::dontSendNotification);
-        lbl.setFont(juce::FontOptions(13.0f));
-        lbl.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
-        lbl.setJustificationType(juce::Justification::centredRight);
-    };
-    setup_sc_label(sc_freq_label, "Freq (Hz)");
-    setup_sc_label(sc_waveform_label, "Waveform");
-    setup_sc_label(sc_level_method_label, "Level method");
-    setup_sc_label(sc_min_dbfs_label, "Min dBFS");
-    setup_sc_label(sc_max_dbfs_label, "Max dBFS");
-    setup_sc_label(sc_length_label, "Length");
+    decibel_cycle_panel = make_unique<DecibelCyclePanel>(apvts);
+    addChildComponent(*decibel_cycle_panel);
 
-    for (auto* s : {&sc_freq_slider, &sc_min_dbfs_slider, &sc_max_dbfs_slider}) {
-        s->setSliderStyle(juce::Slider::LinearHorizontal);
-        s->setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 20);
-    }
     if (!common_state.role) {
         role_overlay = std::make_unique<RoleSelectionOverlay>();
         role_overlay->on_role_selected = [this](Role r) {
@@ -209,22 +182,8 @@ void CompressorProbeEditor::refresh_probe_ui()
     addAndMakeVisible(mode.combo);
     mode.combo.setEnabled(common_state.generator_id.has_value());
 
-    for (auto* c : std::initializer_list<juce::Component*>{
-           &sc_freq_label,
-           &sc_freq_slider,
-           &sc_waveform_label,
-           &sc_waveform.combo,
-           &sc_level_method_label,
-           &sc_level_method.combo,
-           &sc_min_dbfs_label,
-           &sc_min_dbfs_slider,
-           &sc_max_dbfs_label,
-           &sc_max_dbfs_slider,
-           &sc_length_label,
-           &sc_length.combo
-         }) {
-        addAndMakeVisible(c);
-    }
+    const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
+    decibel_cycle_panel->setVisible(is_decibel_cycle);
 }
 
 void CompressorProbeEditor::paint(juce::Graphics& g)
@@ -255,25 +214,10 @@ void CompressorProbeEditor::resized()
     role_label.setBounds(top_row);
 
     if (common_state.role == Role::Probe) {
-        const int label_w = 110;
-        const int ctrl_gap = 8;
-        const int row_h = 24;
-
-        auto layout_row = [&](juce::Label& lbl, juce::Component& ctrl) {
-            area.removeFromTop(4);
-            auto row = area.removeFromTop(row_h);
-            lbl.setBounds(row.removeFromLeft(label_w));
-            row.removeFromLeft(ctrl_gap);
-            ctrl.setBounds(row);
-        };
-
         area.removeFromTop(4);
-        mode.combo.setBounds(area.removeFromTop(row_h));
-        layout_row(sc_freq_label, sc_freq_slider);
-        layout_row(sc_waveform_label, sc_waveform.combo);
-        layout_row(sc_level_method_label, sc_level_method.combo);
-        layout_row(sc_min_dbfs_label, sc_min_dbfs_slider);
-        layout_row(sc_max_dbfs_label, sc_max_dbfs_slider);
-        layout_row(sc_length_label, sc_length.combo);
+        mode.combo.setBounds(area.removeFromTop(24));
+        if (decibel_cycle_panel->isVisible()) {
+            decibel_cycle_panel->setBounds(area);
+        }
     }
 }

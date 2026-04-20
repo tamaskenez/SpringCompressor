@@ -2,6 +2,7 @@
 
 #include "CompressorProbeEditor.h"
 #include "juce_util/logging.h"
+#include "meadow/enum.h"
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -176,8 +177,25 @@ void CompressorProbeProcessor::setStateInformation(const void* data, int sizeInB
 
 void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id, float new_value)
 {
-    (void)parameter_id;
-    (void)new_value;
+    if (common_state.role != Role::Probe) {
+        return;
+    }
+    const auto e = magic_enum::enum_cast<ParameterID>(parameter_id.toRawUTF8());
+    LOG_IF(FATAL, !e) << format("Unknown parameter_id: {}", parameter_id.toRawUTF8());
+    switch (*e) {
+    case ParameterID::mode: {
+        const auto mode_enum = enum_cast_from_float<Mode::E>(new_value);
+        LOG_IF(FATAL, !mode_enum) << format("new_value is not valid as Mode::E: {}", new_value);
+        on_mode_changed(*mode_enum);
+    } break;
+    case ParameterID::steady_curve_freq:
+    case ParameterID::steady_curve_waveform:
+    case ParameterID::steady_curve_level_method:
+    case ParameterID::steady_curve_min_dbfs:
+    case ParameterID::steady_curve_max_dbfs:
+    case ParameterID::steady_curve_length:
+        break;
+    }
 }
 
 void CompressorProbeProcessor::on_role_selected_by_user(Role new_role)
@@ -190,10 +208,10 @@ void CompressorProbeProcessor::on_role_selected_by_user(Role new_role)
     common_state.role = new_role;
     switch (new_role) {
     case Role::Generator:
-        role_impl = make_unique<GeneratorRole>(common_state);
+        role_impl = make_unique<GeneratorRole>(*this);
         break;
     case Role::Probe:
-        role_impl = make_unique<ProbeRole>(common_state);
+        role_impl = make_unique<ProbeRole>(*this);
         break;
     }
     if (common_state.prepared_to_play) {
@@ -231,6 +249,14 @@ const ProbeRoleState* CompressorProbeProcessor::get_probe_state() const
 {
     CHECK(common_state.role == Role::Probe);
     return dynamic_cast<const ProbeRole*>(role_impl.get())->get_state();
+}
+
+Mode::E CompressorProbeProcessor::get_mode() const
+{
+    auto* rap = apvts.getParameter("mode");
+    auto e = enum_cast_from_float<Mode::E>(rap->convertFrom0to1(rap->getValue()));
+    CHECK(e);
+    return *e;
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

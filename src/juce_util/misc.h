@@ -6,6 +6,7 @@
 #include <string_view>
 
 juce::String to_juce_string(std::string_view sv);
+juce::StringArray choices_for(juce::AudioProcessorValueTreeState& apvts, const char* parameter_id);
 
 struct ComboBoxWithAttachment {
     juce::ComboBox combo;

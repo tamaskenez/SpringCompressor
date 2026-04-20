@@ -1,7 +1,7 @@
 #include "ProbeRole.h"
 
 #include "Command.h"
-#include "CommonState.h"
+#include "CompressorProbeProcessor.h"
 #include "pipes.h"
 
 #include <magic_enum/magic_enum.hpp>
@@ -12,8 +12,8 @@ namespace
 constexpr double k_seconds_of_received_audio_blocks = 1.0;
 }
 
-ProbeRole::ProbeRole(CommonState& common_state_arg)
-    : common_state(common_state_arg)
+ProbeRole::ProbeRole(CompressorProbeProcessor& processor_arg)
+    : processor(processor_arg)
 {
     for (size_t i = 0; i < ProbeProtocol::id_bins.size(); ++i)
         filters[i].coeff =
@@ -31,10 +31,10 @@ void ProbeRole::prepare_to_play(double sample_rate, int samples_per_block)
     confirm_count = 0;
     confirmed_generator_id.reset();
 
-    CHECK(common_state.prepared_to_play);
+    CHECK(processor.common_state.prepared_to_play);
 
     vector<vector<float>> channels_samples(
-      sucast(common_state.prepared_to_play->num_channels), vector<float>(sucast(samples_per_block))
+      sucast(processor.common_state.prepared_to_play->num_channels), vector<float>(sucast(samples_per_block))
     );
     const auto N = iceil<size_t>(k_seconds_of_received_audio_blocks * sample_rate / samples_per_block);
     received_audio_blocks = vector<ReceivedAudioBlock>(N);
@@ -46,7 +46,7 @@ void ProbeRole::prepare_to_play(double sample_rate, int samples_per_block)
 void ProbeRole::release_resources()
 {
     state.pipe.reset();
-    common_state.generator_id.reset();
+    processor.common_state.generator_id.reset();
     received_audio_blocks = vector<ReceivedAudioBlock>();
 }
 
@@ -75,7 +75,7 @@ void ProbeRole::process_frame()
     if (decoded_id == last_decoded_id) {
         if (++confirm_count >= 3) {
             confirmed_generator_id = decoded_id;
-            juce::MessageManager::callAsync([this, decoded_id, weak_token = weak_ptr(common_state.token)] {
+            juce::MessageManager::callAsync([this, decoded_id, weak_token = weak_ptr(processor.common_state.token)] {
                 if (weak_token.lock()) {
                     on_generator_id_decoded(decoded_id);
                 }
@@ -138,13 +138,13 @@ void ProbeRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer
 
 void ProbeRole::on_generator_id_decoded(int id)
 {
-    auto a = common_state.file_log_sink->activate();
+    auto a = processor.common_state.file_log_sink->activate();
     LOG(INFO) << format("ProbeRole::on_generator_id_decode({})", id);
 
     {
-        auto p = Pipe::connect(id, *common_state.file_log_sink);
+        auto p = Pipe::connect(id, *processor.common_state.file_log_sink);
         if (!p) {
-            common_state.error = format(
+            processor.common_state.error = format(
               "Generator ID #{} received but failed to connect to named pipe \"{}\"", id, get_pipe_name_for_id(id)
             );
             return;
@@ -155,22 +155,14 @@ void ProbeRole::on_generator_id_decoded(int id)
         on_pipe_message_received(memory_block);
     };
 
-    auto new_command = Command(Mode::Bypass{});
-    if (!state.pipe->send_message(command_as_span(new_command))) {
-        common_state.error = format(
-          "Generator ID #{} received but failed to send message to named pipe \"{}\"", id, get_pipe_name_for_id(id)
-        );
-        return;
-    }
-    state.pending_command = new_command;
-    LOG(INFO) << format("Sent Bypass command#{}", new_command.command_index);
+    processor.common_state.generator_id = id;
 
-    common_state.generator_id = id;
+    on_mode_changed(processor.get_mode());
 }
 
 void ProbeRole::on_pipe_message_received(span<const char> memory_block) const
 {
-    auto a = common_state.file_log_sink->activate();
+    auto a = processor.common_state.file_log_sink->activate();
 
     LOG(INFO) << format("ProbeRole::on_pipe_message_received(size: {})", memory_block.size());
 
@@ -200,22 +192,22 @@ Mode::V get_mode_as_v(const ProbeRoleState::Modes& modes, Mode::E e)
 
 void ProbeRole::on_mode_changed(Mode::E mode_e)
 {
-    auto a = common_state.file_log_sink->activate();
+    auto a = processor.common_state.file_log_sink->activate();
 
     LOG(INFO) << format("ProbeRole::on_mode_changed({})", magic_enum::enum_name(mode_e));
 
-    auto new_command = Command(get_mode_as_v(state.modes, mode_e));
+    auto new_command = Command(next_command_index++, get_mode_as_v(state.modes, mode_e));
     if (state.pipe->send_message(command_as_span(new_command))) {
         state.pending_command = new_command;
         state.current_mode = mode_e;
     } else {
-        common_state.error = format("Failed to send command#{} to generator.", new_command.command_index);
+        processor.common_state.error = format("Failed to send command#{} to generator.", new_command.command_index);
     }
 }
 
 void ProbeRole::on_ui_refresh_timer_elapsed()
 {
-    auto a = common_state.file_log_sink->activate();
+    auto a = processor.common_state.file_log_sink->activate();
     size_t rab_index;
     while (audio_to_message_queue.try_dequeue(rab_index)) {
         auto& rab = received_audio_blocks[rab_index];

@@ -12,11 +12,12 @@
 
 struct CommonState;
 class Pipe;
+class CompressorProbeProcessor;
 
 class GeneratorRole : public RoleInterface
 {
 public:
-    explicit GeneratorRole(CommonState& common_state);
+    explicit GeneratorRole(CompressorProbeProcessor& processor);
     ~GeneratorRole() override;
 
     void prepare_to_play(double sample_rate, int samples_per_block) override;
@@ -36,8 +37,8 @@ public:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GeneratorRole)
 
 private:
+    CompressorProbeProcessor& processor;
     // Message thread variables and functions
-    CommonState& common_state;
     std::unique_ptr<Pipe> pipe;
     std::atomic<GeneratorStatus> status{GeneratorStatus::Idle};
     optional<string> last_command_received;
