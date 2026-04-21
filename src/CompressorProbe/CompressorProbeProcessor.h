@@ -1,15 +1,13 @@
 #pragma once
 
 #include "CommonState.h"
+#include "CompressorProbeMessageThreadState.h"
+#include "CompressorProbeThreadSafeState.h"
 #include "GeneratorRole.h"
 #include "ProbeRole.h"
 #include "ProcessorInterface.h"
-
+#include "juce_util/AudioProcessorWithDefaults.h"
 #include "juce_util/JuceTimer.h"
-
-#include <juce_audio_processors/juce_audio_processors.h>
-
-#include <atomic>
 
 class CompressorProbeEditor;
 class RoleInterface;
@@ -18,7 +16,7 @@ class ProbeRole;
 class GeneratorRole;
 
 class CompressorProbeProcessor
-    : public juce::AudioProcessor
+    : public AudioProcessorWithDefaults
     , public ProcessorInterface
     , juce::AudioProcessorValueTreeState::Listener
 {
@@ -29,86 +27,58 @@ public:
     CompressorProbeProcessor();
     ~CompressorProbeProcessor() override;
 
-    const juce::String getName() const override
-    {
-        return JucePlugin_Name;
-    }
-
+    // AudioProcessor callbacks on some non-audio thread.
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     void numChannelsChanged() override;
-    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-
-    double getTailLengthSeconds() const override
-    {
-        return 0.0;
-    }
-    bool acceptsMidi() const override
-    {
-        return false;
-    }
-    bool producesMidi() const override
-    {
-        return false;
-    }
-
-    juce::AudioProcessorEditor* createEditor() override;
-    bool hasEditor() const override
-    {
-        return true;
-    }
-
-    int getNumPrograms() override
-    {
-        return 1;
-    }
-    int getCurrentProgram() override
-    {
-        return 0;
-    }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override
-    {
-        return {};
-    }
-    void changeProgramName(int, const juce::String&) override {}
-
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    void on_ui_refresh_timer_elapsed();
-    CompressorProbeEditor* get_active_editor() const;
+protected:
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
 
-    // ProcessorInterface functions
-    void on_role_selected_by_user(Role role) override;
-    void on_mode_changed(Mode::E mode) override;
-    const ProbeRoleState* get_probe_state() const override;
-    std::pair<GeneratorStatus, std::optional<std::string>> get_generator_status() const override;
+public:
+    // AudioProcessor callbacks on the audio thread.
+    void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
-    // AudioProcessorValueTreeState::Listener
+    // AudioProcessor callbacks on the message thread.
+    juce::AudioProcessorEditor* createEditor() override;
+
+    // AudioProcessorValueTreeState::Listener callback (any thread, including audio).
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 
-protected:
-    bool isBusesLayoutSupported(const BusesLayout& layouts) const override
-    {
-        auto in = layouts.getMainInputChannelSet();
-        auto out = layouts.getMainOutputChannelSet();
-        return in == out && (in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo());
-    }
+    // The _mt postfix means: to be called on message-thread.
+    void on_ui_refresh_timer_elapsed_mt();
+
+    // ProcessorInterface functions
+    void on_role_selected_by_user_mt(Role role) override;
 
 private:
-    void update_channels_on_editor(CompressorProbeEditor* e = nullptr);
+    template<class Fn>
+    void call_async_on_mt(Fn&& fn_arg)
+    {
+        bool result = juce::MessageManager::callAsync([fn = MOVE(fn_arg),
+                                                       this_lifetime_token_mutex_copy = this_lifetime_token_mutex,
+                                                       weak_token = weak_ptr(this_lifetime_token)] {
+            auto lock = std::scoped_lock(*this_lifetime_token_mutex_copy);
+            if (auto locked_token = weak_token.lock()) {
+                fn();
+            }
+        });
+        DCHECK(result);
+    }
 
-    juce::AudioProcessorValueTreeState apvts;
-
-    Mode::E get_mode() const;
-
-    unique_ptr<FileLogSink> file_log_sink;
-    CommonState common_state;
-    unique_ptr<RoleInterface> role_impl;
+    CompressorProbeThreadSafeState ts_state;
+    CompressorProbeMessageThreadState mt_state;
     JuceTimer ui_refresh_timer;
+    CommonState common_state;
+    std::mutex mutex;
+    unique_ptr<RoleInterface> role_impl_storage;
 
-    std::atomic<RoleInterface*> role_impl_for_audio_thread;
+    // this_lifetime_token_mutex is intentionally not a std::shared_mutex, because we need to keep it
+    // alive even when the object is destructed.
+    shared_ptr<std::mutex> this_lifetime_token_mutex = make_shared<std::mutex>();
+    shared_ptr<monostate> this_lifetime_token = make_shared<monostate>();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeProcessor)
 };

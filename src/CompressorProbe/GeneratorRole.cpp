@@ -3,6 +3,7 @@
 #include "Command.h"
 #include "CompressorProbeProcessor.h"
 #include "ProbeProtocol.h"
+#include "juce_util/logging.h"
 #include "pipes.h"
 
 #include <magic_enum/magic_enum.hpp>
@@ -54,21 +55,27 @@ GeneratorRole::GeneratorRole(CompressorProbeProcessor& processor_arg)
     : processor(processor_arg)
     , decibel_cycle_loop_generator(1.0)
 {
-    auto [new_id, new_pipe] = create_id_and_pipe(*processor.common_state.file_log_sink);
+    // The constructor is expected to be called on the message thread, but with processor.mutex locked.
+    JUCE_ASSERT_MESSAGE_THREAD
+
+    auto [new_id, new_pipe] = create_id_and_pipe(*processor.ts_state.file_log_sink);
     if (!new_pipe) {
-        processor.common_state.error = format(
-          "Failed to find an available pipe name with ID 0-65535 (starting with \"{}\").", get_pipe_name_for_id(0)
-        );
+        processor.call_async_on_mt([this] {
+            processor.mt_state.error = format(
+              "Failed to find an available pipe name with ID 0-65535 (starting with \"{}\").", get_pipe_name_for_id(0)
+            );
+        });
+
         return;
     }
     new_pipe->on_message_received = [this](span<const char> memory_block) {
-        on_pipe_message_received(memory_block);
+        on_pipe_message_received_mt(memory_block);
     };
-    processor.common_state.generator_id = new_id;
-    pipe = MOVE(new_pipe);
+    processor.ts_state.generator_id = new_id;
+    mt.pipe = MOVE(new_pipe);
 
     tone_buf = build_tone_buffer(iicast<uint16_t>(new_id));
-    status.store(GeneratorStatus::TransmittingId);
+    processor.ts_state.generator_status.store(GeneratorStatus::TransmittingId);
 }
 
 GeneratorRole::~GeneratorRole() = default;
@@ -82,7 +89,7 @@ void GeneratorRole::prepare_to_play(double sample_rate, int /*samples_per_block*
 
 void GeneratorRole::release_resources()
 {
-    status.store(GeneratorStatus::Idle);
+    processor.ts_state.generator_status.store(GeneratorStatus::Idle);
 }
 
 void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi_messages*/)
@@ -96,17 +103,19 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
         }
     }
     if (got_new_command) {
-        audio_to_message_queue.enqueue(
-          Response{
-            .command_index = current_command->command_index,
-            .effective_from_process_block_index = processor.common_state.next_process_block_index
-          }
-        );
+        processor.call_async_on_mt([this,
+                                    response = Response{
+                                      .command_index = current_command->command_index,
+                                      .effective_from_process_block_index =
+                                        processor.common_state.next_process_block_index
+                                    }] {
+            mt.pipe->send_message(response_as_span(response));
+        });
         tone_playhead = 0;
     }
     const unsigned N = sucast(buffer.getNumSamples());
     CHECK(buffer.getNumChannels() == 1 || buffer.getNumChannels() == 2);
-    switch (status.load()) {
+    switch (processor.ts_state.generator_status.load()) {
     case GeneratorStatus::Idle:
         buffer.clear();
         break;
@@ -136,9 +145,11 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
     }
 }
 
-void GeneratorRole::on_pipe_message_received(span<const char> memory_block)
+void GeneratorRole::on_pipe_message_received_mt(span<const char> memory_block)
 {
-    auto a = processor.common_state.file_log_sink->activate();
+    JUCE_ASSERT_MESSAGE_THREAD
+
+    auto a = processor.ts_state.file_log_sink->activate();
 
     auto cmd_or = command_from_span(memory_block);
     if (!cmd_or) {
@@ -146,18 +157,10 @@ void GeneratorRole::on_pipe_message_received(span<const char> memory_block)
         return;
     }
 
-    status.store(GeneratorStatus::Connected);
+    processor.ts_state.generator_status.store(GeneratorStatus::Connected);
 
     auto& cmd = *cmd_or;
-    last_command_received =
+    processor.mt_state.generator_command =
       format("Received command#{}: {}", cmd.command_index, magic_enum::enum_name(enum_of(cmd.mode)));
     message_to_audio_queue.enqueue(cmd);
-}
-
-void GeneratorRole::on_ui_refresh_timer_elapsed()
-{
-    Response response;
-    while (audio_to_message_queue.try_dequeue(response)) {
-        pipe->send_message(response_as_span(response));
-    }
 }

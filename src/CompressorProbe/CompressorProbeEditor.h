@@ -8,7 +8,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 class ProcessorInterface;
-struct CommonState;
+struct CompressorProbeThreadSafeState;
+class CompressorProbeMessageThreadState;
+class CompressorProbeProcessorMTh;
 
 class RoleSelectionOverlay : public juce::Component
 {
@@ -33,9 +35,9 @@ class CompressorProbeEditor : public juce::AudioProcessorEditor
 public:
     CompressorProbeEditor(
       juce::AudioProcessor& p,
-      juce::AudioProcessorValueTreeState& apvts,
-      ProcessorInterface* processor_interface,
-      const CommonState& common_state
+      CompressorProbeThreadSafeState& ts_state,
+      CompressorProbeMessageThreadState& state_mt,
+      ProcessorInterface* processor_interface
     );
     ~CompressorProbeEditor() override = default;
 
@@ -50,13 +52,14 @@ private:
     void refresh_generator_ui();
     void refresh_probe_ui();
 
+    CompressorProbeThreadSafeState& ts_state;
+    CompressorProbeMessageThreadState& state_mt;
     ProcessorInterface* processor_interface;
-    const CommonState& common_state;
+    ComboBoxWithAttachment mode;
+    WaveScope wave_scope;
+    std::unique_ptr<DecibelCyclePanel> decibel_cycle_panel;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
     juce::Label title_label, role_label, error_label;
-    ComboBoxWithAttachment mode;
-    std::unique_ptr<DecibelCyclePanel> decibel_cycle_panel;
-    WaveScope wave_scope;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CompressorProbeEditor)
 };

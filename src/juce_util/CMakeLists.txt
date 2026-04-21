@@ -6,6 +6,7 @@ target_link_libraries(juce_util
     PUBLIC
         juce::juce_events
         meadow::meadow
+        magic_enum::magic_enum
     PRIVATE
         abseil::abseil
 )

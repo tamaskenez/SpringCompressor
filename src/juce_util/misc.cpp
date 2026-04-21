@@ -5,6 +5,15 @@ juce::String to_juce_string(std::string_view sv)
     return juce::String(sv.data(), sv.size());
 }
 
+juce::StringArray to_juce_string_array(const std::vector<std::string>& xs)
+{
+    juce::StringArray result;
+    for (auto& x : xs) {
+        result.add(to_juce_string(x));
+    }
+    return result;
+}
+
 juce::StringArray choices_for(juce::AudioProcessorValueTreeState& apvts, const char* parameter_id)
 {
     return dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(parameter_id))->choices;

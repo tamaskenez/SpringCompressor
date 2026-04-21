@@ -49,14 +49,13 @@ public:
     void prepare_to_play(double sample_rate, int samples_per_block) override;
     void process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages) override;
     void release_resources() override;
-    void on_ui_refresh_timer_elapsed() override;
-
-    void on_mode_changed(Mode::E mode);
-
-    const ProbeRoleState* get_state() const
+    void on_ui_refresh_timer_elapsed_mt() override;
+    Role get_role() const override
     {
-        return &state;
+        return Role::Probe;
     }
+
+    void on_mode_changed_mt(Mode::E mode);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProbeRole)
 
@@ -64,24 +63,27 @@ private:
     CompressorProbeProcessor& processor;
 
     // Message thread variables and functions
-    ProbeRoleState state;
-    int next_command_index = 1;
-    void on_generator_id_decoded(int id);
-    void on_pipe_message_received(span<const char> memory_block) const;
+    ProbeRoleState mt_state;
+    void on_generator_id_decoded_mt(int id);
+    void on_pipe_message_received_mt(span<const char> memory_block) const;
 
     // Audio thread variables and functions
 
     // One Goertzel filter per bin; coefficients are set in the constructor.
-    std::array<GoertzelFilter, ProbeProtocol::id_bins.size()> filters{};
-    int sample_count = 0;
-    int last_decoded_id = -1; // most recently decoded ID, -1 = none yet
-    int confirm_count = 0;    // consecutive frames with the same decoded ID
-    std::optional<int> confirmed_generator_id;
-    size_t next_rab_to_check = 0;
+    struct AudioThreadState {
+        std::array<GoertzelFilter, ProbeProtocol::id_bins.size()> filters{};
+        int sample_count = 0;
+        int last_decoded_id = -1; // most recently decoded ID, -1 = none yet
+        int confirm_count = 0;    // consecutive frames with the same decoded ID
+        std::optional<int> confirmed_generator_id;
+        size_t next_rab_to_check = 0;
+    } at;
 
     void process_frame();
 
     // Shared between audio and message thread.
     moodycamel::ReaderWriterQueue<size_t> audio_to_message_queue; // Indices into received_audio_blocks.
+
+    // vector is constructed before audio thread, item access is synchronized.
     vector<ReceivedAudioBlock> received_audio_blocks;
 };

@@ -1,23 +1,23 @@
 #include "CompressorProbeEditor.h"
 
-#include "CommonState.h"
+#include "CompressorProbeMessageThreadState.h"
+#include "CompressorProbeThreadSafeState.h"
 #include "ProcessorInterface.h"
+#include "RoleInterface.h"
 
 // --- RoleSelectionOverlay ---
 
 RoleSelectionOverlay::RoleSelectionOverlay()
 {
     generator_btn.onClick = [this] {
-        if (on_role_selected)
-            juce::MessageManager::callAsync([this] {
-                on_role_selected(Role::Generator);
-            });
+        if (on_role_selected) {
+            on_role_selected(Role::Generator);
+        }
     };
     probe_btn.onClick = [this] {
-        if (on_role_selected)
-            juce::MessageManager::callAsync([this] {
-                on_role_selected(Role::Probe);
-            });
+        if (on_role_selected) {
+            on_role_selected(Role::Probe);
+        }
     };
 
     auto setup_hint = [](juce::Label& lbl, const juce::String& text) {
@@ -84,25 +84,26 @@ void RoleSelectionOverlay::resized()
 // --- CompressorProbeEditor ---
 
 CompressorProbeEditor::CompressorProbeEditor(
-  juce::AudioProcessor& p,
-  juce::AudioProcessorValueTreeState& apvts,
-  ProcessorInterface* processor_interface_arg,
-  const CommonState& common_state_arg
+  juce::AudioProcessor& processor_arg,
+  CompressorProbeThreadSafeState& ts_state_arg,
+  CompressorProbeMessageThreadState& state_mt_arg,
+  ProcessorInterface* processor_interface_arg
 )
-    : AudioProcessorEditor(p)
+    : AudioProcessorEditor(processor_arg)
+    , ts_state(ts_state_arg)
+    , state_mt(state_mt_arg)
     , processor_interface(processor_interface_arg)
-    , common_state(common_state_arg)
-    , mode(apvts, "mode", choices_for(apvts, "mode"))
-    , wave_scope(apvts)
+    , mode(state_mt.apvts, "mode", choices_for(state_mt.apvts, "mode"))
+    , wave_scope(state_mt.apvts)
+    , decibel_cycle_panel(make_unique<DecibelCyclePanel>(state_mt.apvts))
 {
-    decibel_cycle_panel = make_unique<DecibelCyclePanel>(apvts);
     addChildComponent(*decibel_cycle_panel);
     addChildComponent(wave_scope);
 
-    if (!common_state.role) {
+    if (!ts_state.role_impl.load()) {
         role_overlay = std::make_unique<RoleSelectionOverlay>();
-        role_overlay->on_role_selected = [this](Role r) {
-            processor_interface->on_role_selected_by_user(r);
+        role_overlay->on_role_selected = [this](Role role) {
+            processor_interface->on_role_selected_by_user_mt(role);
         };
         addAndMakeVisible(*role_overlay);
     } else {
@@ -118,7 +119,7 @@ void CompressorProbeEditor::enable_channels(bool b)
 
 void CompressorProbeEditor::refresh_ui()
 {
-    if (auto role = common_state.role) {
+    if (auto* role_impl = ts_state.role_impl.load()) {
         role_overlay.reset();
 
         title_label.setFont(juce::FontOptions(18.0f));
@@ -132,15 +133,15 @@ void CompressorProbeEditor::refresh_ui()
         addAndMakeVisible(title_label);
         addAndMakeVisible(role_label);
 
-        if (common_state.error) {
+        if (state_mt.error) {
             error_label.setFont(juce::FontOptions(13.0f));
             error_label.setColour(juce::Label::textColourId, juce::Colours::red);
             error_label.setJustificationType(juce::Justification::left);
-            error_label.setText(*common_state.error, juce::dontSendNotification);
+            error_label.setText(*state_mt.error, juce::dontSendNotification);
             addAndMakeVisible(error_label);
         }
 
-        switch (*role) {
+        switch (role_impl->get_role()) {
         case Role::Generator:
             refresh_generator_ui();
             setSize(400, 300);
@@ -156,16 +157,17 @@ void CompressorProbeEditor::refresh_ui()
 
 void CompressorProbeEditor::refresh_generator_ui()
 {
-    if (common_state.generator_id)
-        title_label.setText("Generator #" + juce::String(*common_state.generator_id), juce::dontSendNotification);
+    const auto generator_id = ts_state.generator_id.load();
+    if (generator_id != k_invalid_generator_id)
+        title_label.setText("Generator #" + juce::String(generator_id), juce::dontSendNotification);
     else
         title_label.setText("Generator", juce::dontSendNotification);
 
-    if (processor_interface->get_generator_status().first == GeneratorStatus::TransmittingId)
+    if (ts_state.generator_status.load() == GeneratorStatus::TransmittingId)
         role_label.setText("Connecting to the probe", juce::dontSendNotification);
     else {
-        if (auto current_generator_command = processor_interface->get_generator_status().second) {
-            role_label.setText(*current_generator_command, juce::dontSendNotification);
+        if (state_mt.generator_command) {
+            role_label.setText(*state_mt.generator_command, juce::dontSendNotification);
         } else {
             role_label.setText({}, juce::dontSendNotification);
         }
@@ -176,20 +178,18 @@ void CompressorProbeEditor::refresh_probe_ui()
 {
     title_label.setText("Probe", juce::dontSendNotification);
 
-    if (!common_state.prepared_to_play) {
+    if (!ts_state.prepared_to_play) {
         role_label.setText("Start the audio engine to begin", juce::dontSendNotification);
     } else {
-        if (common_state.generator_id) {
-            role_label.setText(
-              "Connected to generator #" + juce::String(*common_state.generator_id), juce::dontSendNotification
-            );
+        if (auto generator_id = ts_state.generator_id.load(); generator_id != k_invalid_generator_id) {
+            role_label.setText("Connected to generator #" + juce::String(generator_id), juce::dontSendNotification);
         } else {
             role_label.setText("Connecting to the generator", juce::dontSendNotification);
         }
     }
 
     addAndMakeVisible(mode.combo);
-    mode.combo.setEnabled(common_state.generator_id.has_value());
+    mode.combo.setEnabled(ts_state.generator_id.load() != k_invalid_generator_id);
 
     const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
     decibel_cycle_panel->setVisible(is_decibel_cycle);
@@ -218,7 +218,7 @@ void CompressorProbeEditor::resized()
 
     auto area = getLocalBounds().reduced(8, 0);
 
-    if (common_state.role == Role::Generator && common_state.error) {
+    if (ts_state.get_role() == Role::Generator && state_mt.error) {
         area.removeFromBottom(8);
         error_label.setBounds(area.removeFromBottom(40));
     }
@@ -228,8 +228,8 @@ void CompressorProbeEditor::resized()
     title_label.setBounds(top_row.removeFromLeft(top_row.getWidth() / 3));
     role_label.setBounds(top_row);
 
-    if (common_state.role == Role::Probe) {
-        if (common_state.error) {
+    if (ts_state.get_role() == Role::Probe) {
+        if (state_mt.error) {
             area.removeFromTop(4);
             error_label.setBounds(area.removeFromTop(20));
         }
