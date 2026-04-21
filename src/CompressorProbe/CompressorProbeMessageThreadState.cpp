@@ -68,11 +68,3 @@ void CompressorProbeMessageThreadState::on_ui_refresh_timer_elapsed()
         e->refresh_ui();
     }
 }
-
-Mode::E CompressorProbeMessageThreadState::get_mode() const
-{
-    auto* rap = apvts.getParameter("mode");
-    auto e = enum_cast_from_float<Mode::E>(rap->convertFrom0to1(rap->getValue()));
-    CHECK(e);
-    return *e;
-}

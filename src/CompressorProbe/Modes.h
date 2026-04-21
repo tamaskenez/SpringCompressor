@@ -2,6 +2,7 @@
 
 #include "meadow/evariant.h"
 
+#include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
 
 constexpr inline array k_decibel_cycle_lengths_msec = {500, 1000, 2000, 4000, 8000};
@@ -26,7 +27,7 @@ struct DecibelCycle {
     LevelMethod level_method;
     int min_dbfs = INT_MIN, max_dbfs = INT_MIN;
     unsigned cycle_length_index = UINT_MAX; // Into k_decibel_cycle_lengths_msec
-
+    string to_string() const;
     bool operator==(const DecibelCycle&) const = default;
 };
 EVARIANT_DECLARE_E_V(Bypass, DecibelCycle)

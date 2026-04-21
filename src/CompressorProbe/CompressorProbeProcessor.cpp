@@ -193,7 +193,7 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 }
 
 // ==== Functions called on any thread, including audio. ====
-void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id, float new_value)
+void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id, UNUSED float new_value)
 {
     if (ts_state.get_role() != Role::Probe) {
         return;
@@ -201,21 +201,19 @@ void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id
     const auto e = magic_enum::enum_cast<ParameterID>(parameter_id.toRawUTF8());
     LOG_IF(FATAL, !e) << format("Unknown parameter_id: {}", parameter_id.toRawUTF8());
     switch (*e) {
-    case ParameterID::mode: {
-        const auto mode_enum = enum_cast_from_float<Mode::E>(new_value);
-        LOG_IF(FATAL, !mode_enum) << format("new_value is not valid as Mode::E: {}", new_value);
-        call_async_on_mt([this, me = *mode_enum] {
-            auto* p = dynamic_cast<ProbeRole*>(ts_state.role_impl.load());
-            CHECK(p);
-            p->on_mode_changed_mt(me);
-        });
-    } break;
+    case ParameterID::mode:
     case ParameterID::steady_curve_freq:
     case ParameterID::steady_curve_waveform:
     case ParameterID::steady_curve_level_method:
     case ParameterID::steady_curve_min_dbfs:
     case ParameterID::steady_curve_max_dbfs:
     case ParameterID::steady_curve_length:
+        call_async_on_mt([this] {
+            auto* p = dynamic_cast<ProbeRole*>(ts_state.role_impl.load());
+            CHECK(p);
+            p->on_mode_changed_mt();
+        });
+        break;
     case ParameterID::channels:
     case ParameterID::y_unit:
     case ParameterID::auto_scale:

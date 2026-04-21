@@ -10,6 +10,7 @@
 juce::String to_juce_string(std::string_view sv);
 juce::StringArray to_juce_string_array(const std::vector<std::string>& xs);
 juce::StringArray choices_for(juce::AudioProcessorValueTreeState& apvts, const char* parameter_id);
+std::string_view to_string_view(juce::StringRef sr);
 
 struct ComboBoxWithAttachment {
     juce::ComboBox combo;

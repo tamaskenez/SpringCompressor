@@ -11,6 +11,22 @@ unsigned integer_period(double fs, int freq)
 }
 } // namespace
 
+namespace Mode
+{
+string DecibelCycle::to_string() const
+{
+    return format(
+      "freq={}, waveform={}, level_method={}, min_dbfs={}, max_dbfs={}, cycle_length_index={}",
+      freq,
+      magic_enum::enum_name(waveform),
+      magic_enum::enum_name(level_method),
+      min_dbfs,
+      max_dbfs,
+      cycle_length_index
+    );
+}
+} // namespace Mode
+
 DecibelCycleLoopGenerator::DecibelCycleLoopGenerator(double fs_arg)
     : fs(fs_arg)
     , normalized_period(integer_period(fs, k_min_decibel_cycle_freq))

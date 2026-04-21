@@ -135,10 +135,11 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
             // TODO add high frequency GR track signal.
             break;
         EVARIANT_CASE(current_command->mode, Mode, DecibelCycle, x) {
+            LOG_EVERY_N_SEC(INFO, 1) << format("DecibelCycle: {}", x.to_string());
             decibel_cycle_loop_generator.generate_block(x, tone_playhead, span(buffer.getArrayOfWritePointers()[0], N));
             tone_playhead = (tone_playhead + N) % decibel_cycle_loop_generator.cycle_length_samples;
             if (buffer.getNumChannels() == 2) {
-                std::copy_n(buffer.getArrayOfWritePointers()[1], N, buffer.getArrayOfWritePointers()[0]);
+                std::copy_n(buffer.getArrayOfWritePointers()[0], N, buffer.getArrayOfWritePointers()[1]);
             }
         } break;
         }

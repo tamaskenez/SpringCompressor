@@ -14,6 +14,11 @@ juce::StringArray to_juce_string_array(const std::vector<std::string>& xs)
     return result;
 }
 
+std::string_view to_string_view(juce::StringRef sr)
+{
+    return std::string_view(sr.text.getAddress(), sr.text.length());
+}
+
 juce::StringArray choices_for(juce::AudioProcessorValueTreeState& apvts, const char* parameter_id)
 {
     return dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter(parameter_id))->choices;

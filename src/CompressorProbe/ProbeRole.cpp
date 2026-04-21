@@ -2,16 +2,18 @@
 
 #include "Command.h"
 #include "CompressorProbeProcessor.h"
+#include "apvts.h"
 #include "juce_util/logging.h"
 #include "pipes.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
+#include <meadow/enum.h>
 
 namespace
 {
 constexpr double k_seconds_of_received_audio_blocks = 1.0;
-}
+} // namespace
 
 ProbeRole::ProbeRole(CompressorProbeProcessor& processor_arg)
     : processor(processor_arg)
@@ -165,7 +167,7 @@ void ProbeRole::on_generator_id_decoded_mt(int id)
 
     processor.ts_state.generator_id = id;
 
-    on_mode_changed_mt(processor.mt_state.get_mode());
+    on_mode_changed_mt();
 }
 
 void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block) const
@@ -186,31 +188,17 @@ void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block) const
     // TODO start processing incoming frames with respect to the confirmed command and effective process block index
 }
 
-namespace
-{
-Mode::V get_mode_as_v(const ProbeRoleState::Modes& modes, Mode::E e)
-{
-    switch (e) {
-    case Mode::E::Bypass:
-        return modes.bypass;
-    case Mode::E::DecibelCycle:
-        return modes.decibel_cycle;
-    }
-}
-} // namespace
-
-void ProbeRole::on_mode_changed_mt(Mode::E mode_e)
+void ProbeRole::on_mode_changed_mt()
 {
     JUCE_ASSERT_MESSAGE_THREAD
 
     auto a = processor.ts_state.file_log_sink->activate();
 
-    LOG(INFO) << format("ProbeRole::on_mode_changed({})", magic_enum::enum_name(mode_e));
+    LOG(INFO) << format("ProbeRole::on_mode_changed({})", magic_enum::enum_name(get_mode(processor.mt_state.apvts)));
 
-    auto new_command = Command(mt_state.next_command_index++, get_mode_as_v(mt_state.modes, mode_e));
+    auto new_command = Command(mt_state.next_command_index++, get_mode_v(processor.mt_state.apvts));
     if (mt_state.pipe->send_message(command_as_span(new_command))) {
         mt_state.pending_command = new_command;
-        mt_state.current_mode = mode_e;
     } else {
         processor.mt_state.error = format("Failed to send command#{} to generator.", new_command.command_index);
     }

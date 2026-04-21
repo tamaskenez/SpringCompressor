@@ -55,7 +55,7 @@ public:
         return Role::Probe;
     }
 
-    void on_mode_changed_mt(Mode::E mode);
+    void on_mode_changed_mt();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProbeRole)
 
