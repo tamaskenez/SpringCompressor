@@ -131,8 +131,10 @@ void CompressorProbeProcessor::releaseResources()
 
     auto lock = std::scoped_lock(mutex);
 
+    CHECK(common_state.prepared_to_play.has_value() == ts_state.prepared_to_play.load());
     if (!common_state.prepared_to_play) {
         LOG(WARNING) << "CompressorProbeProcessor::releaseResources() called without prepareToPlay()";
+        return;
     }
 
     if (auto* p = ts_state.role_impl.load()) {

@@ -65,7 +65,9 @@ private:
                 fn();
             }
         });
-        DCHECK(result);
+        if (!result) {
+            LOG(WARNING) << "MessageManager::callAsync returned false.";
+        }
     }
 
     CompressorProbeThreadSafeState ts_state;
