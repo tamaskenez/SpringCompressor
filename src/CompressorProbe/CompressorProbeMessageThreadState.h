@@ -19,6 +19,7 @@ public:
     function<CompressorProbeEditor*()> get_active_editor_fn;
     optional<string> generator_command;
     optional<string> error;
+    std::deque<float> incoming_samples;
 
     CompressorProbeMessageThreadState(
       juce::AudioProcessor& processor_to_connect_to, function<CompressorProbeEditor*()> get_active_editor_fn_arg
@@ -26,4 +27,5 @@ public:
 
     void update_channels_on_editor(optional<Role> role, int num_channels, CompressorProbeEditor* e_arg = nullptr);
     void on_ui_refresh_timer_elapsed();
+    void update_wave_scope();
 };

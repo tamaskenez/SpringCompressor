@@ -16,6 +16,11 @@ enum class LevelMethod {
     peak,
     rms
 };
+enum class Channels {
+    left,
+    right,
+    sum
+};
 
 namespace Mode
 {

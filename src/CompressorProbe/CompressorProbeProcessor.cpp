@@ -62,10 +62,10 @@ void CompressorProbeProcessor::on_ui_refresh_timer_elapsed_mt()
     JUCE_ASSERT_MESSAGE_THREAD
 
     auto a = ts_state.file_log_sink->activate();
-    mt_state.on_ui_refresh_timer_elapsed();
     if (auto* p = ts_state.role_impl.load()) {
         p->on_ui_refresh_timer_elapsed_mt();
     }
+    mt_state.on_ui_refresh_timer_elapsed();
 }
 
 void CompressorProbeProcessor::on_role_selected_by_user_mt(Role new_role)

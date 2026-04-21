@@ -210,9 +210,36 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
 
     auto a = processor.ts_state.file_log_sink->activate();
     size_t rab_index;
+    auto& incoming_samples = processor.mt_state.incoming_samples;
     while (audio_to_message_queue.try_dequeue(rab_index)) {
         auto& rab = received_audio_blocks[rab_index];
-        // TODO: process the received audio block.
+        switch (rab.channels_samples.size()) {
+        case 1:
+            incoming_samples.append_range(rab.channels_samples[0]);
+            break;
+        case 2:
+            switch (get_choice<Channels>(processor.mt_state.apvts, "channels")) {
+            case Channels::left:
+                incoming_samples.append_range(rab.channels_samples[0]);
+                break;
+            case Channels::right:
+                incoming_samples.append_range(rab.channels_samples[1]);
+                break;
+            case Channels::sum:
+                incoming_samples.append_range(
+                  vi::zip(rab.channels_samples[0], rab.channels_samples[1]) | vi::transform([](auto&& p) {
+                      return std::midpoint(std::get<0>(p), std::get<1>(p));
+                  })
+                );
+                break;
+            }
+            break;
+        default:
+            CHECK(false);
+        }
         rab.allocated_for_message_thread.store(false); // Give back to audio thread.
+        const auto num_remove = std::max<ptrdiff_t>(0, uscast(incoming_samples.size()) - 1000);
+        incoming_samples.erase(incoming_samples.begin(), incoming_samples.begin() + num_remove);
     }
+    processor.mt_state.update_wave_scope();
 }

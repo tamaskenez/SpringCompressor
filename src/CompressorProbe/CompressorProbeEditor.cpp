@@ -194,14 +194,6 @@ void CompressorProbeEditor::refresh_probe_ui()
     const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
     decibel_cycle_panel->setVisible(is_decibel_cycle);
     wave_scope.setVisible(true);
-
-    const unsigned N = 100;
-    vector<float> samples_in(N), samples_out(N);
-    for (unsigned i = 0; i < N; ++i) {
-        samples_in[i] = std::lerp(-1.0f, 1.0f, ifcast<float>(i) / N);
-        samples_out[i] = std::lerp(0.5f, -0.5f, ifcast<float>(i) / N);
-    }
-    wave_scope.update(samples_in, samples_out);
 }
 
 void CompressorProbeEditor::paint(juce::Graphics& g)

@@ -56,7 +56,11 @@ private:
     CompressorProbeMessageThreadState& state_mt;
     ProcessorInterface* processor_interface;
     ComboBoxWithAttachment mode;
+
+public:
     WaveScope wave_scope;
+
+private:
     std::unique_ptr<DecibelCyclePanel> decibel_cycle_panel;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
     juce::Label title_label, role_label, error_label;

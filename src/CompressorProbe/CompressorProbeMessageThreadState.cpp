@@ -68,3 +68,11 @@ void CompressorProbeMessageThreadState::on_ui_refresh_timer_elapsed()
         e->refresh_ui();
     }
 }
+
+void CompressorProbeMessageThreadState::update_wave_scope()
+{
+    if (auto* e = get_active_editor_fn()) {
+        vector<float> ins(incoming_samples.begin(), incoming_samples.end());
+        e->wave_scope.update(span(ins), span(ins));
+    }
+}
