@@ -92,7 +92,7 @@ void GeneratorRole::release_resources()
     processor.ts_state.generator_status.store(GeneratorStatus::Idle);
 }
 
-void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi_messages*/)
+void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer)
 {
     bool got_new_command = false;
     {
@@ -106,8 +106,7 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
         processor.call_async_on_mt([this,
                                     response = Response{
                                       .command_index = current_command->command_index,
-                                      .effective_from_process_block_index =
-                                        processor.common_state.next_process_block_index
+                                      .command_received_timestamp = chr::steady_clock::now()
                                     }] {
             mt.pipe->send_message(response_as_span(response));
         });
@@ -135,7 +134,6 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBu
             // TODO add high frequency GR track signal.
             break;
         EVARIANT_CASE(current_command->mode, Mode, DecibelCycle, x) {
-            LOG_EVERY_N_SEC(INFO, 1) << format("DecibelCycle: {}", x.to_string());
             decibel_cycle_loop_generator.generate_block(x, tone_playhead, span(buffer.getArrayOfWritePointers()[0], N));
             tone_playhead = (tone_playhead + N) % decibel_cycle_loop_generator.cycle_length_samples;
             if (buffer.getNumChannels() == 2) {

@@ -118,10 +118,12 @@ void CompressorProbeProcessor::prepareToPlay(double sample_rate, int samples_per
     ts_state.generator_id = k_invalid_generator_id;
     CHECK(!common_state.prepared_to_play);
     common_state.prepared_to_play = {sample_rate, samples_per_block};
+    call_async_on_mt([this, sample_rate]() {
+        mt_state.sample_rate = sample_rate;
+    });
     if (auto* p = ts_state.role_impl.load()) {
         p->prepare_to_play(sample_rate, samples_per_block);
     }
-    common_state.next_process_block_index = 0;
     ts_state.prepared_to_play = true;
 }
 
@@ -141,6 +143,9 @@ void CompressorProbeProcessor::releaseResources()
         p->release_resources();
     }
     common_state.prepared_to_play.reset();
+    call_async_on_mt([this]() {
+        mt_state.sample_rate.reset();
+    });
     ts_state.prepared_to_play = false;
 }
 
@@ -180,16 +185,15 @@ bool CompressorProbeProcessor::isBusesLayoutSupported(const BusesLayout& layouts
 
 // ==== Function called on the audio thread. ====
 
-void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages)
+void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /* midi_messages*/)
 {
     juce::ScopedNoDenormals no_denormals;
 
     if (auto* p = ts_state.role_impl.load()) {
-        p->process_block(buffer, midi_messages);
+        p->process_block(buffer);
     } else {
         buffer.clear();
     }
-    ++common_state.next_process_block_index;
 }
 
 // ==== Functions called on any thread, including audio. ====

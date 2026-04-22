@@ -21,7 +21,7 @@ public:
     ~GeneratorRole() override;
 
     void prepare_to_play(double sample_rate, int samples_per_block) override;
-    void process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages) override;
+    void process_block(juce::AudioBuffer<float>& buffer) override;
     void release_resources() override;
     void on_ui_refresh_timer_elapsed_mt() override {}
     Role get_role() const override

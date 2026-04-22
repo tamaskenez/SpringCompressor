@@ -95,7 +95,7 @@ void ProbeRole::process_frame()
 }
 
 // Called on audio thread.
-void ProbeRole::process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& /*midi_messages*/)
+void ProbeRole::process_block(juce::AudioBuffer<float>& buffer)
 {
     if (at.confirmed_generator_id) {
         // Find an available ReceivedAudioBlock.
@@ -170,7 +170,7 @@ void ProbeRole::on_generator_id_decoded_mt(int id)
     on_mode_changed_mt();
 }
 
-void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block) const
+void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block)
 {
     auto a = processor.ts_state.file_log_sink->activate();
 
@@ -183,9 +183,16 @@ void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block) const
     }
     auto& response = *response_or;
     if (mt_state.pending_command && response.command_index == mt_state.pending_command->command_index) {
-        LOG(INFO) << format("Pending command response received, command_index: {}", response.command_index);
+        LOG(INFO) << format(
+          "Pending command response received, command_index: {}, delay: {} µs",
+          response.command_index,
+          chr::duration_cast<chr::microseconds>(chr::steady_clock::now() - response.command_received_timestamp).count()
+        );
     }
-    // TODO start processing incoming frames with respect to the confirmed command and effective process block index
+    mt_state.active_command = ActiveCommand{
+      .command = *mt_state.pending_command, .command_received_timestamp = response.command_received_timestamp
+    };
+    mt_state.pending_command.reset();
 }
 
 void ProbeRole::on_mode_changed_mt()
@@ -210,23 +217,39 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
 
     auto a = processor.ts_state.file_log_sink->activate();
     size_t rab_index;
+
+    auto sample_rate_or = processor.mt_state.sample_rate;
+    if (!sample_rate_or) {
+        // Just give back the blocks.
+        while (audio_to_message_queue.try_dequeue(rab_index)) {
+            received_audio_blocks[rab_index].allocated_for_message_thread.store(false);
+        }
+        return;
+    }
+    auto sample_rate = *sample_rate_or;
+    const size_t num_wave_scope_samples = iround<size_t>(k_wave_scope_duration_sec * sample_rate);
+
     auto& incoming_samples = processor.mt_state.incoming_samples;
+    if (incoming_samples.size() != num_wave_scope_samples) {
+        incoming_samples.assign(num_wave_scope_samples, 0.0f);
+    }
+    auto& compressed_block = mt_state.compressed_block;
     while (audio_to_message_queue.try_dequeue(rab_index)) {
         auto& rab = received_audio_blocks[rab_index];
         switch (rab.channels_samples.size()) {
         case 1:
-            incoming_samples.append_range(rab.channels_samples[0]);
+            compressed_block = rab.channels_samples[0];
             break;
         case 2:
             switch (get_choice<Channels>(processor.mt_state.apvts, "channels")) {
             case Channels::left:
-                incoming_samples.append_range(rab.channels_samples[0]);
+                compressed_block = rab.channels_samples[0];
                 break;
             case Channels::right:
-                incoming_samples.append_range(rab.channels_samples[1]);
+                compressed_block = rab.channels_samples[1];
                 break;
             case Channels::sum:
-                incoming_samples.append_range(
+                compressed_block.assign_range(
                   vi::zip(rab.channels_samples[0], rab.channels_samples[1]) | vi::transform([](auto&& p) {
                       return std::midpoint(std::get<0>(p), std::get<1>(p));
                   })
@@ -238,8 +261,38 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
             CHECK(false);
         }
         rab.allocated_for_message_thread.store(false); // Give back to audio thread.
-        const auto num_remove = std::max<ptrdiff_t>(0, uscast(incoming_samples.size()) - 1000);
-        incoming_samples.erase(incoming_samples.begin(), incoming_samples.begin() + num_remove);
+
+        // Send the compressed_block to UI.
+        if (compressed_block.size() >= num_wave_scope_samples) {
+            incoming_samples.assign(
+              compressed_block.begin() + uscast(compressed_block.size() - num_wave_scope_samples),
+              compressed_block.end()
+            );
+        } else {
+            assert(incoming_samples.size() == num_wave_scope_samples);
+            const auto num_retained_samples = num_wave_scope_samples - compressed_block.size();
+            // Copy the end of incoming samples to the beginning.
+            ra::copy_n(
+              incoming_samples.begin() + uscast(num_wave_scope_samples - num_retained_samples),
+              uscast(num_retained_samples),
+              incoming_samples.begin()
+            );
+            // Fill the rest with the new samples.
+            std::copy_n(
+              compressed_block.begin(), compressed_block.size(), incoming_samples.begin() + uscast(num_retained_samples)
+            );
+        }
+
+        // compressed_block is ready to be analyzed.
+        analyze_compressed_block_mt(mt_state.compressed_block);
     }
     processor.mt_state.update_wave_scope();
+}
+
+void ProbeRole::analyze_compressed_block_mt(UNUSED const vector<float>& compressed_block)
+{
+    if (!mt_state.active_command) {
+        return;
+    }
+    if (!mt_state.active_command->latency_samples) {}
 }

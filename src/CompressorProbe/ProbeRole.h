@@ -47,7 +47,7 @@ public:
     explicit ProbeRole(CompressorProbeProcessor& processor_arg);
 
     void prepare_to_play(double sample_rate, int samples_per_block) override;
-    void process_block(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi_messages) override;
+    void process_block(juce::AudioBuffer<float>& buffer) override;
     void release_resources() override;
     void on_ui_refresh_timer_elapsed_mt() override;
     Role get_role() const override
@@ -65,7 +65,8 @@ private:
     // Message thread variables and functions
     ProbeRoleState mt_state;
     void on_generator_id_decoded_mt(int id);
-    void on_pipe_message_received_mt(span<const char> memory_block) const;
+    void on_pipe_message_received_mt(span<const char> memory_block);
+    void analyze_compressed_block_mt(const vector<float>& compressed_block);
 
     // Audio thread variables and functions
 

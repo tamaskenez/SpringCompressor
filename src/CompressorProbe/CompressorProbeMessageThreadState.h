@@ -19,7 +19,8 @@ public:
     function<CompressorProbeEditor*()> get_active_editor_fn;
     optional<string> generator_command;
     optional<string> error;
-    std::deque<float> incoming_samples;
+    std::vector<float> incoming_samples;
+    optional<double> sample_rate; // Valid when prepared to play.
 
     CompressorProbeMessageThreadState(
       juce::AudioProcessor& processor_to_connect_to, function<CompressorProbeEditor*()> get_active_editor_fn_arg

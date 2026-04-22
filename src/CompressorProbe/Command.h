@@ -21,7 +21,7 @@ static_assert(std::is_trivially_copyable_v<Command>);
 
 struct Response {
     int command_index;
-    int effective_from_process_block_index;
+    chr::steady_clock::time_point command_received_timestamp;
 };
 
 static_assert(std::is_trivially_copyable_v<Response>);
