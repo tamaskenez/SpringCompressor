@@ -53,6 +53,11 @@ public:
     // ProcessorInterface functions
     void on_role_selected_by_user_mt(Role role) override;
 
+    bool is_development_mode() const
+    {
+        return wrapperType == wrapperType_Standalone;
+    }
+
 private:
     template<class Fn>
     void call_async_on_mt(Fn&& fn_arg)

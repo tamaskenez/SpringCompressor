@@ -108,8 +108,7 @@ void ProbeRole::process_block(int64_t block_sample_index, juce::AudioBuffer<floa
             }
         }
         if (!rab_index) {
-            DCHECK(rab_index);
-            LOG(ERROR) << "No available ReceivedAudioBlock";
+            LOG_EVERY_N_SEC(ERROR, 10) << "No available ReceivedAudioBlock";
         } else {
             auto& rab = received_audio_blocks[*rab_index];
             rab.allocated_for_message_thread.store(true);
@@ -455,16 +454,37 @@ void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<
     case AnalyzerWorkspace::E::Bypass:
         break;
     EVARIANT_CASE(aw, AnalyzerWorkspace, DecibelCycle, x) {
+        auto* mode_dbc = std::get_if<Mode::DecibelCycle>(&mt_state.active_command->command.mode);
+        CHECK(mode_dbc);
+        const bool peak_ref = [&] {
+            switch (mode_dbc->level_ref) {
+            case LevelRef::peak:
+                return true;
+            case LevelRef::rms:
+                return false;
+            }
+        }();
         // Find the energies of periods in the input/output samples.
         const auto P = x.decibel_cycle_loop_generator.normalized_period.samples.size();
         auto& aodc = processor.mt_state.ao.decibel_cycle;
         for (unsigned i = 0; i < N; ++i) {
-            x.input_period_sum2 += square(input_block[i]);
-            x.output_period_sum2 += square(output_block[i]);
+            if (peak_ref) {
+                x.max_abs_input_period = std::max<double>(x.max_abs_input_period, abs(input_block[i]));
+                x.max_abs_output_period = std::max<double>(x.max_abs_output_period, abs(output_block[i]));
+            } else {
+                x.input_period_sum2 += square(input_block[i]);
+                x.output_period_sum2 += square(output_block[i]);
+            }
             const bool finished_last_sample_of_period = (x.block_sample_index_in_cycle + i + 1) % P == 0;
             if (finished_last_sample_of_period) {
-                const auto input_db = matlab::pow2db(x.input_period_sum2 / ifcast<double>(P));
-                const auto output_db = matlab::pow2db(x.output_period_sum2 / ifcast<double>(P));
+                const auto [input_db, output_db] =
+                  peak_ref ? pair(matlab::mag2db(x.max_abs_input_period), matlab::mag2db(x.max_abs_output_period))
+                           : pair(
+                               matlab::pow2db(x.input_period_sum2 / ifcast<double>(P)),
+                               matlab::pow2db(x.output_period_sum2 / ifcast<double>(P))
+                             );
+                x.max_abs_input_period = 0.0;
+                x.max_abs_output_period = 0.0;
                 x.input_period_sum2 = 0.0;
                 x.output_period_sum2 = 0.0;
                 if (x.previous_input_db) {

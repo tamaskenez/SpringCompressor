@@ -55,7 +55,7 @@ juce::AudioProcessorEditor* CompressorProbeProcessor::createEditor()
     auto* p = new CompressorProbeEditor(*this, ts_state, mt_state, this);
     mt_state.update_channels_on_editor(ts_state.get_role(), ts_state.num_channels.load(), p);
 
-    if (k_development_mode && !development_mode.generator) {
+    if (is_development_mode() && !development_mode.generator) {
         development_mode.generator = make_unique<GeneratorRole>(*this);
         call_async_on_mt([this] {
             on_role_selected_by_user_mt(Role::Probe);
@@ -73,7 +73,7 @@ void CompressorProbeProcessor::on_ui_refresh_timer_elapsed_mt()
     if (auto* p = ts_state.role_impl.load()) {
         p->on_ui_refresh_timer_elapsed_mt();
     }
-    if (k_development_mode && development_mode.generator) {
+    if (is_development_mode() && development_mode.generator) {
         development_mode.generator->on_ui_refresh_timer_elapsed_mt();
     }
     mt_state.on_ui_refresh_timer_elapsed();
@@ -106,7 +106,7 @@ void CompressorProbeProcessor::on_role_selected_by_user_mt(Role new_role)
         role_impl_storage->prepare_to_play(
           common_state.prepared_to_play->sample_rate, common_state.prepared_to_play->samples_per_block
         );
-        if (k_development_mode && development_mode.generator) {
+        if (is_development_mode() && development_mode.generator) {
             development_mode.generator->prepare_to_play(
               common_state.prepared_to_play->sample_rate, common_state.prepared_to_play->samples_per_block
             );
@@ -140,7 +140,7 @@ void CompressorProbeProcessor::prepareToPlay(double sample_rate, int samples_per
     if (auto* p = ts_state.role_impl.load()) {
         p->prepare_to_play(sample_rate, samples_per_block);
     }
-    if (k_development_mode && development_mode.generator) {
+    if (is_development_mode() && development_mode.generator) {
         development_mode.generator->prepare_to_play(sample_rate, samples_per_block);
     }
     ts_state.prepared_to_play = true;
@@ -162,7 +162,7 @@ void CompressorProbeProcessor::releaseResources()
     if (auto* p = ts_state.role_impl.load()) {
         p->release_resources();
     }
-    if (k_development_mode && development_mode.generator) {
+    if (is_development_mode() && development_mode.generator) {
         development_mode.generator->release_resources();
     }
     common_state.prepared_to_play.reset();
@@ -212,7 +212,7 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 {
     juce::ScopedNoDenormals no_denormals;
 
-    if (k_development_mode && development_mode.generator) {
+    if (is_development_mode() && development_mode.generator) {
         development_mode.generator->process_block(at.block_sample_index, buffer);
         buffer.applyGain(0.5);
     }
