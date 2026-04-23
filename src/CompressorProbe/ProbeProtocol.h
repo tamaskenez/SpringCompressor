@@ -20,6 +20,6 @@ inline constexpr std::array<int, 18> id_bins{
 // Detection threshold for Goertzel power.
 // Expected power for a tone at amplitude 0.1 over nfft samples: (0.1 * nfft/2)^2 ≈ 41 943.
 // Threshold at ~1/10 of that handles up to 10 dB of compressor attenuation.
-inline constexpr double detection_threshold = 4000.0;
+inline constexpr double detection_threshold = 40.0;
 
 } // namespace ProbeProtocol

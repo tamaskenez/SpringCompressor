@@ -4,6 +4,7 @@
 #include "CompressorProbeProcessor.h"
 #include "ProbeProtocol.h"
 #include "juce_util/logging.h"
+#include "meadow/matlab.h"
 #include "pipes.h"
 #include "sync.h"
 
@@ -33,7 +34,7 @@ vector<float> build_tone_buffer(uint16_t id)
     // Each sinusoid completes an integer number of cycles in nfft samples, so the
     // buffer tiles seamlessly with no discontinuity at the loop point.
     vector<float> tone_buf(ProbeProtocol::nfft);
-    constexpr float amplitude = 0.1f;
+    const float amplitude = matlab::db2mag(-40.0f);
 
     auto add_tone = [&](int bin) {
         for (int n = 0; n < ProbeProtocol::nfft; ++n) {

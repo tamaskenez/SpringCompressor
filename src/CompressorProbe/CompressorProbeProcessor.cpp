@@ -5,6 +5,8 @@
 #include "config.h"
 #include "juce_util/logging.h"
 #include "juce_util/misc.h"
+#include "meadow/math.h"
+#include "meadow/matlab.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/enum.h>
@@ -214,7 +216,26 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
     if (is_development_mode() && development_mode.generator) {
         development_mode.generator->process_block(at.block_sample_index, buffer);
-        buffer.applyGain(0.5);
+        const auto* rp = buffer.getReadPointer(0);
+        float max_abs = 0.0f;
+        double sum_x2 = 0.0;
+        for (int j = 0; j < buffer.getNumSamples(); ++j) {
+            max_abs = std::max(max_abs, std::abs(rp[j]));
+            sum_x2 += square(rp[j]);
+        }
+        UNUSED const auto peak_db = ffcast<double>(matlab::mag2db(max_abs));
+        UNUSED const auto rms_db = matlab::pow2db(sum_x2 / buffer.getNumSamples());
+        const double threshold = -32;
+        const double ratio = 4.0;
+        const auto in = rms_db;
+        double gr = NAN;
+        if (in <= threshold) {
+            gr = 1.0;
+        } else {
+            const auto out = (in - threshold) / ratio + threshold;
+            gr = matlab::db2mag(out - in);
+        }
+        buffer.applyGain(ffcast<float>(gr));
     }
 
     if (auto* p = ts_state.role_impl.load()) {
