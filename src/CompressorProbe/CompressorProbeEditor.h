@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AnalyzerScope.h"
 #include "DecibelCyclePanel.h"
 #include "Role.h"
 #include "WaveScope.h"
@@ -59,6 +60,7 @@ private:
 
 public:
     WaveScope wave_scope;
+    AnalyzerScope analyzer_scope;
 
 private:
     std::unique_ptr<DecibelCyclePanel> decibel_cycle_panel;

@@ -320,6 +320,7 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
         );
     }
     processor.mt_state.update_wave_scope();
+    processor.mt_state.update_analyzer_scope();
 }
 
 void ProbeRole::sync_if_needed(int64_t block_sample_index, span<const float> output_block)
@@ -432,9 +433,9 @@ unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_ind
           iicast<unsigned>(sample_index_into_loop),
           span(input_block.data() + start_sample, input_block.size() - start_sample)
         );
-        wsp.block_sample_index_in_cycle = modulo(
+        wsp.block_sample_index_in_cycle = iicast<unsigned>(modulo(
           signed_subtract(sample_index_into_loop, start_sample), wsp.decibel_cycle_loop_generator.cycle_length_samples
-        );
+        ));
         return iicast<unsigned>(
           (sucast(sample_index_into_loop) + input_block.size() - start_sample)
           % wsp.decibel_cycle_loop_generator.normalized_period.samples.size()

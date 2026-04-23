@@ -43,4 +43,5 @@ public:
     void update_channels_on_editor(optional<Role> role, int num_channels, CompressorProbeEditor* e_arg = nullptr);
     void on_ui_refresh_timer_elapsed();
     void update_wave_scope();
+    void update_analyzer_scope();
 };

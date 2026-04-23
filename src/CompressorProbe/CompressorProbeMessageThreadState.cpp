@@ -1,5 +1,6 @@
 #include "CompressorProbeMessageThreadState.h"
 
+#include "AnalyzerScope.h"
 #include "CompressorProbeEditor.h"
 #include "config.h"
 #include "juce_util/misc.h"
@@ -110,6 +111,23 @@ vector<pair<double, double>> CompressorProbeMessageThreadState::AnalyzerOutput::
     );
     asc.append_range(desc);
     return asc;
+}
+
+void CompressorProbeMessageThreadState::update_analyzer_scope()
+{
+    if (auto* e = get_active_editor_fn()) {
+        auto& dc = ao.decibel_cycle;
+        vector<AnalyzerScope::Point> asc, desc;
+        asc.reserve(dc.ascending.size());
+        for (auto& item : dc.ascending) {
+            asc.push_back({item.input_db, item.output_db});
+        }
+        desc.reserve(dc.descending.size());
+        for (auto& item : dc.descending) {
+            desc.push_back({item.input_db, item.output_db});
+        }
+        e->analyzer_scope.update(asc, desc);
+    }
 }
 
 vector<pair<double, double>> CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::input_to_gr_db() const

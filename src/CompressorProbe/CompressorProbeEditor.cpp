@@ -99,6 +99,7 @@ CompressorProbeEditor::CompressorProbeEditor(
 {
     addChildComponent(*decibel_cycle_panel);
     addChildComponent(wave_scope);
+    addChildComponent(analyzer_scope);
 
     if (!ts_state.role_impl.load()) {
         role_overlay = std::make_unique<RoleSelectionOverlay>();
@@ -148,7 +149,7 @@ void CompressorProbeEditor::refresh_ui()
             break;
         case Role::Probe:
             refresh_probe_ui();
-            setSize(800, 600);
+            setSize(800, 608);
             break;
         }
         resized();
@@ -194,6 +195,7 @@ void CompressorProbeEditor::refresh_probe_ui()
     const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
     decibel_cycle_panel->setVisible(is_decibel_cycle);
     wave_scope.setVisible(true);
+    analyzer_scope.setVisible(true);
 }
 
 void CompressorProbeEditor::paint(juce::Graphics& g)
@@ -235,6 +237,7 @@ void CompressorProbeEditor::resized()
             decibel_cycle_panel->setBounds(left);
         }
 
-        wave_scope.setBounds(area);
+        wave_scope.setBounds(area.removeFromTop(area.getWidth() / 2));
+        analyzer_scope.setBounds(area);
     }
 }
