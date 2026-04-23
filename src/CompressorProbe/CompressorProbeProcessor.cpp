@@ -38,6 +38,40 @@ CompressorProbeProcessor::CompressorProbeProcessor()
     for (const auto& id : get_enum_names_in_StringArray<ParameterID>()) {
         mt_state.apvts.addParameterListener(id, this);
     }
+
+#if 0
+    // TESTING EnvelopeFilter
+    double fs = 48000;
+    EnvelopeFilterLoopGenerator g(fs);
+    Mode::EnvelopeFilter p{
+      .carrier_freq = 10000,
+      .max_carrier_amp_dbfs = -3,
+      .min_mod_freq = 100,
+      .max_mod_freq = 1000,
+      .mod_amp_db = 6,
+      .cycle_length_index = 1
+    };
+    g.init(p);
+    FILE* f = fopen("/tmp/a.m", "wt");
+    println(f, "A = [");
+    for (unsigned i = 0; i < g.cycle_length_samples; ++i) {
+        println(f, "{}", g.freq_at_sample(i));
+    }
+    println(f, "];");
+    fclose(f);
+
+    vector<float> x(g.cycle_length_samples);
+    g.generate_block(p, 0, x);
+
+    f = fopen("/tmp/b.m", "wt");
+    println(f, "B = [");
+    for (auto xi:x){
+        println(f, "{}", xi);
+    }
+    println(f, "];");
+    fclose(f);
+    NOP;
+#endif
 }
 
 CompressorProbeProcessor::~CompressorProbeProcessor()

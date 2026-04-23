@@ -131,5 +131,67 @@ string_view get_label_for_enum(Mode::E e)
         return "Bypass plus GR tracker signal"sv;
     case Mode::E::DecibelCycle:
         return "Steady state compression curve"sv;
+    case Mode::E::EnvelopeFilter:
+        return "Envelope filter"sv;
+    }
+}
+
+EnvelopeFilterLoopGenerator::EnvelopeFilterLoopGenerator(double fs_arg)
+    : fs(fs_arg)
+{
+}
+
+void EnvelopeFilterLoopGenerator::init(const Mode::EnvelopeFilter& new_params)
+{
+    if (params != new_params) {
+        params = new_params;
+
+        carrier_period_samples = integer_period(fs, new_params.carrier_freq);
+        num_periods = iround<size_t>(
+          k_decibel_cycle_lengths_msec.at(params.cycle_length_index) / 1000.0 * fs
+          / ifcast<double>(carrier_period_samples)
+        );
+        cycle_length_samples = iicast<size_t>(carrier_period_samples * num_periods);
+
+        const double cls = ifcast<double>(cycle_length_samples);
+        T = cls / 2.0 / fs;
+        f0 = new_params.min_mod_freq;
+        f1 = new_params.max_mod_freq;
+        k1 = 2.0 * log(f1 / f0) / cls;
+        L1 = 2.0 * num::pi * f0 * T / log(f1 / f0);
+        L2 = 2.0 * num::pi * f1 * T / log(f0 / f1);
+        alpha_T = modulo(L1 * (f1 / f0 - 1.0), 2 * num::pi);
+        P1 = pow(f1 / f0, 2.0 / cls);
+        f1_over_f0 = f1 / f0;
+
+        const double A1 = matlab::db2mag(ifcast<double>(params.max_carrier_amp_dbfs - params.mod_amp_db));
+        const double A2 = matlab::db2mag(ifcast<double>(params.max_carrier_amp_dbfs));
+        MC = (A1 + A2) / 2;
+        MA = (A2 - A1) / 2;
+    }
+}
+
+double EnvelopeFilterLoopGenerator::freq_at_sample(size_t j) const
+{
+    if (j < cycle_length_samples / 2) {
+        return f0 * exp(k1 * ifcast<double>(j));
+    } else {
+        return f1 * exp(-k1 * (ifcast<double>(j) - ifcast<double>(cycle_length_samples) / 2.0));
+    }
+}
+
+void EnvelopeFilterLoopGenerator::generate_block(
+  const Mode::EnvelopeFilter& new_params, unsigned sample_index, span<float> output_block
+)
+{
+    init(new_params);
+    const double M = 2.0 * num::pi / ifcast<double>(carrier_period_samples);
+    for (size_t i = 0; i < output_block.size(); ++i) {
+        auto j = sample_index + i;
+        const auto carrier = cos(M * ifcast<double>(j % carrier_period_samples));
+        const double alpha_t = j < cycle_length_samples / 2
+                               ? L1 * (pow(P1, ifcast<double>(j)) - 1.0)
+                               : alpha_T + L2 * (pow(P1, -ifcast<double>(j)) * f1_over_f0 - 1.0);
+        output_block[i] = ffcast<float>(carrier * (MC + MA * cos(alpha_t)));
     }
 }

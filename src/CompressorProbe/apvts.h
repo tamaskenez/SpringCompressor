@@ -22,4 +22,5 @@ E get_choice(const juce::AudioProcessorValueTreeState& apvts, juce::StringRef id
 
 Mode::E get_mode(const juce::AudioProcessorValueTreeState& apvts);
 Mode::DecibelCycle get_mode_decibel_cycle(const juce::AudioProcessorValueTreeState& apvts);
+Mode::EnvelopeFilter get_envelope_filter(const juce::AudioProcessorValueTreeState& apvts);
 Mode::V get_mode_v(const juce::AudioProcessorValueTreeState& apvts);

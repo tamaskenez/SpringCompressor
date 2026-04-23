@@ -207,6 +207,10 @@ void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block)
         processor.mt_state.ao.decibel_cycle.compressor_curve.resize(dc.decibel_cycle_loop_generator.num_periods);
         analyzer_workspace = MOVE(dc);
     } break;
+    EVARIANT_CASE(mt_state.pending_command->mode, Mode, EnvelopeFilter, x) {
+        (void)x;
+        CHECK(false); // TODO
+    }
     }
     mt_state.active_command = ActiveCommand{
       .command = *mt_state.pending_command,
@@ -440,6 +444,10 @@ unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_ind
           (sucast(sample_index_into_loop) + input_block.size() - start_sample)
           % wsp.decibel_cycle_loop_generator.normalized_period.samples.size()
         );
+    }
+    EVARIANT_CASE(mt_state.active_command->command.mode, Mode, EnvelopeFilter, x) {
+        (void)x;
+        CHECK(false); // TODO
     }
     }
 }

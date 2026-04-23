@@ -178,6 +178,11 @@ void GeneratorRole::process_block(int64_t /*block_sample_index*/, juce::AudioBuf
                     );
                 }
             } break;
+            EVARIANT_CASE(current_command->mode, Mode, EnvelopeFilter, x)
+                (void)x;
+                CHECK(false); // TODO
+                {
+                }
             }
         }
     }
