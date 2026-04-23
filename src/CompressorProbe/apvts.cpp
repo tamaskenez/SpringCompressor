@@ -36,7 +36,7 @@ Mode::DecibelCycle get_mode_decibel_cycle(const juce::AudioProcessorValueTreeSta
     return Mode::DecibelCycle{
       .freq = get_int(apvts, "steady_curve_freq"),
       .waveform = get_choice<Waveform>(apvts, "steady_curve_waveform"),
-      .level_method = get_choice<LevelMethod>(apvts, "steady_curve_level_method"),
+      .level_ref = get_choice<LevelRef>(apvts, "steady_curve_level_ref"),
       .min_dbfs = get_int(apvts, "steady_curve_min_dbfs"),
       .max_dbfs = get_int(apvts, "steady_curve_max_dbfs"),
       .cycle_length_index = sucast(get_choice_index(apvts, "steady_curve_length")),

@@ -5,7 +5,7 @@ DecibelCyclePanel::DecibelCyclePanel(juce::AudioProcessorValueTreeState& apvts)
     , min_dbfs_attachment(apvts, "steady_curve_min_dbfs", min_dbfs_slider)
     , max_dbfs_attachment(apvts, "steady_curve_max_dbfs", max_dbfs_slider)
     , waveform(apvts, "steady_curve_waveform", choices_for(apvts, "steady_curve_waveform"))
-    , level_method(apvts, "steady_curve_level_method", choices_for(apvts, "steady_curve_level_method"))
+    , level_ref(apvts, "steady_curve_level_ref", choices_for(apvts, "steady_curve_level_ref"))
     , length(apvts, "steady_curve_length", choices_for(apvts, "steady_curve_length"))
 {
     auto setup_label = [](juce::Label& lbl, const juce::String& text) {
@@ -16,7 +16,7 @@ DecibelCyclePanel::DecibelCyclePanel(juce::AudioProcessorValueTreeState& apvts)
     };
     setup_label(freq_label, "Freq (Hz)");
     setup_label(waveform_label, "Waveform");
-    setup_label(level_method_label, "Level method");
+    setup_label(level_ref_label, "Level Ref");
     setup_label(min_dbfs_label, "Min dBFS");
     setup_label(max_dbfs_label, "Max dBFS");
     setup_label(length_label, "Length");
@@ -31,8 +31,8 @@ DecibelCyclePanel::DecibelCyclePanel(juce::AudioProcessorValueTreeState& apvts)
            &freq_slider,
            &waveform_label,
            &waveform.combo,
-           &level_method_label,
-           &level_method.combo,
+           &level_ref_label,
+           &level_ref.combo,
            &min_dbfs_label,
            &min_dbfs_slider,
            &max_dbfs_label,
@@ -62,7 +62,7 @@ void DecibelCyclePanel::resized()
 
     layout_row(freq_label, freq_slider);
     layout_row(waveform_label, waveform.combo);
-    layout_row(level_method_label, level_method.combo);
+    layout_row(level_ref_label, level_ref.combo);
     layout_row(min_dbfs_label, min_dbfs_slider);
     layout_row(max_dbfs_label, max_dbfs_slider);
     layout_row(length_label, length.combo);

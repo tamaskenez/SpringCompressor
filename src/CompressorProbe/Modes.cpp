@@ -16,10 +16,10 @@ namespace Mode
 string DecibelCycle::to_string() const
 {
     return format(
-      "freq={}, waveform={}, level_method={}, min_dbfs={}, max_dbfs={}, cycle_length_index={}",
+      "freq={}, waveform={}, level_ref={}, min_dbfs={}, max_dbfs={}, cycle_length_index={}",
       freq,
       magic_enum::enum_name(waveform),
-      magic_enum::enum_name(level_method),
+      magic_enum::enum_name(level_ref),
       min_dbfs,
       max_dbfs,
       cycle_length_index
@@ -33,9 +33,7 @@ DecibelCycleLoopGenerator::DecibelCycleLoopGenerator(double fs_arg)
 {
 }
 
-void DecibelCycleLoopGenerator::compute_normalized_period(
-  int new_freq, Waveform new_waveform, LevelMethod new_level_method
-)
+void DecibelCycleLoopGenerator::compute_normalized_period(int new_freq, Waveform new_waveform, LevelRef new_level_ref)
 {
     const auto period_samples = integer_period(fs, new_freq);
     auto& y = normalized_period.samples;
@@ -66,10 +64,10 @@ void DecibelCycleLoopGenerator::compute_normalized_period(
     }
     const double rms = sqrt(sum / period_samples);
     const double m = [&] {
-        switch (new_level_method) {
-        case LevelMethod::peak:
+        switch (new_level_ref) {
+        case LevelRef::peak:
             return 1 / peak;
-        case LevelMethod::rms:
+        case LevelRef::rms:
             return 1 / rms;
         }
     }();
@@ -89,11 +87,11 @@ void DecibelCycleLoopGenerator::generate_block(
 {
     bool changed = false;
     if (params.freq == INT_MIN || integer_period(fs, new_params.freq) != integer_period(fs, params.freq)
-        || new_params.waveform != params.waveform || new_params.level_method != params.level_method) {
-        compute_normalized_period(new_params.freq, new_params.waveform, new_params.level_method);
+        || new_params.waveform != params.waveform || new_params.level_ref != params.level_ref) {
+        compute_normalized_period(new_params.freq, new_params.waveform, new_params.level_ref);
         params.freq = new_params.freq;
         params.waveform = new_params.waveform;
-        params.level_method = new_params.level_method;
+        params.level_ref = new_params.level_ref;
         changed = true;
     }
 

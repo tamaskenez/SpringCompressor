@@ -12,7 +12,7 @@ enum class Waveform {
     square,
     hi_crest_square
 };
-enum class LevelMethod {
+enum class LevelRef {
     peak,
     rms
 };
@@ -29,7 +29,7 @@ struct Bypass {
 struct DecibelCycle {
     int freq = INT_MIN; // k_min_decibel_cycle_freq <= freq
     Waveform waveform;
-    LevelMethod level_method;
+    LevelRef level_ref;
     int min_dbfs = INT_MIN, max_dbfs = INT_MIN;
     unsigned cycle_length_index = UINT_MAX; // Into k_decibel_cycle_lengths_msec
     string to_string() const;
@@ -66,6 +66,6 @@ struct DecibelCycleLoopGenerator {
     void generate_block(const Mode::DecibelCycle& new_params, unsigned sample_index, span<float> output_block);
 
 private:
-    void compute_normalized_period(int new_freq, Waveform new_waveform, LevelMethod new_level_method);
+    void compute_normalized_period(int new_freq, Waveform new_waveform, LevelRef new_level_ref);
     double decibel_for_sample_ix(unsigned sample_ix) const;
 };

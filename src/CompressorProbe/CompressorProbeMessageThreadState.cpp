@@ -24,7 +24,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         0
       ),
       make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID{"steady_curve_level_method", 1}, "Level Method", juce::StringArray{"peak", "rms"}, 0
+        juce::ParameterID{"steady_curve_level_ref", 1}, "Level Ref", juce::StringArray{"Peak", "RMS"}, 0
       ),
       make_unique<juce::AudioParameterInt>(juce::ParameterID{"steady_curve_min_dbfs", 1}, "Min dBFS", -60, 0, -60),
       make_unique<juce::AudioParameterInt>(juce::ParameterID{"steady_curve_max_dbfs", 1}, "Max dBFS", -50, 0, -6),

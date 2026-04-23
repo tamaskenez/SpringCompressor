@@ -238,7 +238,7 @@ void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id
     case ParameterID::mode:
     case ParameterID::steady_curve_freq:
     case ParameterID::steady_curve_waveform:
-    case ParameterID::steady_curve_level_method:
+    case ParameterID::steady_curve_level_ref:
     case ParameterID::steady_curve_min_dbfs:
     case ParameterID::steady_curve_max_dbfs:
     case ParameterID::steady_curve_length:

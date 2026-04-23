@@ -8,10 +8,10 @@ constexpr double k_silence_after_new_command_sec = 0.1;
 constexpr double k_min_corr = 0.33;
 constexpr double k_seconds_of_received_audio_blocks = 1.0; // How many seconds of RABs need to be maintained.
 
-#ifdef NDEBUG
-constexpr bool k_development_mode = false;
-#else
+#if JucePlugin_Build_Standalone
 // Development mode: the plugin automatically goes into Probe mode and creates a Generator without UI and conntects to
 // it.
-constexpr bool k_development_mode = true;
+constexpr bool k_development_mode = false;
+#else
+constexpr bool k_development_mode = false;
 #endif
