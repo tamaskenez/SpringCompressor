@@ -56,6 +56,7 @@ vector<float> build_tone_buffer(uint16_t id)
 GeneratorRole::GeneratorRole(CompressorProbeProcessor& processor_arg)
     : processor(processor_arg)
     , decibel_cycle_loop_generator(1.0)
+    , envelope_filter_loop_generator(1.0)
 {
     // The constructor is expected to be called on the message thread, but with processor.mutex locked.
     JUCE_ASSERT_MESSAGE_THREAD
@@ -87,6 +88,7 @@ void GeneratorRole::prepare_to_play(double sample_rate, int samples_per_block)
 {
     tone_playhead = 0;
     decibel_cycle_loop_generator = DecibelCycleLoopGenerator(sample_rate);
+    envelope_filter_loop_generator = EnvelopeFilterLoopGenerator(sample_rate);
     output_block.resize(sucast(samples_per_block));
 }
 
@@ -178,11 +180,21 @@ void GeneratorRole::process_block(int64_t /*block_sample_index*/, juce::AudioBuf
                     );
                 }
             } break;
-            EVARIANT_CASE(current_command->mode, Mode, EnvelopeFilter, x)
-                (void)x;
-                CHECK(false); // TODO
-                {
+            EVARIANT_CASE(current_command->mode, Mode, EnvelopeFilter, x) {
+                const auto M = N - output_block.size();
+                envelope_filter_loop_generator.generate_block(
+                  x, tone_playhead, span(buffer.getArrayOfWritePointers()[0] + output_block.size(), M)
+                );
+                tone_playhead =
+                  iicast<unsigned>((tone_playhead + M) % envelope_filter_loop_generator.cycle_length_samples);
+                if (buffer.getNumChannels() == 2) {
+                    std::copy_n(
+                      buffer.getArrayOfWritePointers()[0] + output_block.size(),
+                      M,
+                      buffer.getArrayOfWritePointers()[1] + output_block.size()
+                    );
                 }
+            } break;
             }
         }
     }

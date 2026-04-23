@@ -405,10 +405,39 @@ void ProbeRole::sync_if_needed(int64_t block_sample_index, span<const float> out
     LOG(INFO) << "Sync detected";
 }
 
-unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block)
+ProbeRole::CycleBoundsResult ProbeRole::compute_cycle_bounds(
+  int64_t block_sample_index, unsigned cycle_length_samples, unsigned period_samples, span<float> input_block
+)
 {
     CHECK(mt_state.active_command && mt_state.active_command->test_signal_begin_sample_index);
     auto& test_signal_begin_sample_index = *mt_state.active_command->test_signal_begin_sample_index;
+    // Find the start of the most recent cycle.
+    while (block_sample_index - test_signal_begin_sample_index >= cycle_length_samples) {
+        test_signal_begin_sample_index += cycle_length_samples;
+    }
+    size_t start_sample; // In the current block
+    if (test_signal_begin_sample_index <= block_sample_index) {
+        start_sample = 0;
+    } else {
+        start_sample = sucast(test_signal_begin_sample_index - block_sample_index);
+        std::fill_n(input_block.begin(), start_sample, 0.0f);
+    }
+    const auto sample_index_into_loop = block_sample_index + uscast(start_sample) - test_signal_begin_sample_index;
+    CHECK(in_co_range(sample_index_into_loop, 0, cycle_length_samples));
+
+    return CycleBoundsResult{
+      .sample_index_into_loop = iicast<unsigned>(sample_index_into_loop),
+      .input_block_part = span(input_block.data() + start_sample, input_block.size() - start_sample),
+      .block_sample_index_in_cycle =
+        iicast<unsigned>(modulo(signed_subtract(sample_index_into_loop, start_sample), cycle_length_samples)),
+      .next_block_phase =
+        iicast<unsigned>((sucast(sample_index_into_loop) + input_block.size() - start_sample) % period_samples)
+    };
+}
+
+unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block)
+{
+    CHECK(mt_state.active_command && mt_state.active_command->test_signal_begin_sample_index);
 
     switch (enum_of(mt_state.active_command->command.mode)) {
     case Mode::E::Bypass:
@@ -418,32 +447,17 @@ unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_ind
         auto* awdc = std::get_if<AnalyzerWorkspace::DecibelCycle>(&aw);
         CHECK(awdc);
         auto& wsp = *awdc;
-        // Find the start of the most recent cycle.
-        while (block_sample_index - test_signal_begin_sample_index
-               >= wsp.decibel_cycle_loop_generator.cycle_length_samples) {
-            test_signal_begin_sample_index += wsp.decibel_cycle_loop_generator.cycle_length_samples;
-        }
-        size_t start_sample; // In the current block
-        if (test_signal_begin_sample_index <= block_sample_index) {
-            start_sample = 0;
-        } else {
-            start_sample = sucast(test_signal_begin_sample_index - block_sample_index);
-            std::fill_n(input_block.begin(), start_sample, 0.0f);
-        }
-        const auto sample_index_into_loop = block_sample_index + uscast(start_sample) - test_signal_begin_sample_index;
-        CHECK(in_co_range(sample_index_into_loop, 0, wsp.decibel_cycle_loop_generator.cycle_length_samples));
-        wsp.decibel_cycle_loop_generator.generate_block(
-          x,
-          iicast<unsigned>(sample_index_into_loop),
-          span(input_block.data() + start_sample, input_block.size() - start_sample)
+
+        auto r = compute_cycle_bounds(
+          block_sample_index,
+          wsp.decibel_cycle_loop_generator.cycle_length_samples,
+          iicast<unsigned>(wsp.decibel_cycle_loop_generator.normalized_period.samples.size()),
+          input_block
         );
-        wsp.block_sample_index_in_cycle = iicast<unsigned>(modulo(
-          signed_subtract(sample_index_into_loop, start_sample), wsp.decibel_cycle_loop_generator.cycle_length_samples
-        ));
-        return iicast<unsigned>(
-          (sucast(sample_index_into_loop) + input_block.size() - start_sample)
-          % wsp.decibel_cycle_loop_generator.normalized_period.samples.size()
-        );
+
+        wsp.decibel_cycle_loop_generator.generate_block(x, r.sample_index_into_loop, r.input_block_part);
+        wsp.block_sample_index_in_cycle = r.block_sample_index_in_cycle;
+        return r.next_block_phase;
     }
     EVARIANT_CASE(mt_state.active_command->command.mode, Mode, EnvelopeFilter, x) {
         (void)x;

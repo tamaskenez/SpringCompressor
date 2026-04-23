@@ -47,7 +47,7 @@ Mode::EnvelopeFilter get_envelope_filter(const juce::AudioProcessorValueTreeStat
 {
     return Mode::EnvelopeFilter{
       .carrier_freq = get_int(apvts, "envelope_filter_carrier_freq"),
-      .max_carrier_amp_dbfs = get_int(apvts, "envelope_filter_max_carrier_dbfs"),
+      .max_carrier_amp_dbfs = get_int(apvts, "envelope_filter_max_carrier_db"),
       .min_mod_freq = get_int(apvts, "envelope_filter_min_mod_freq"),
       .max_mod_freq = get_int(apvts, "envelope_filter_max_mod_freq"),
       .mod_amp_db = get_int(apvts, "envelope_filter_mod_amp_db"),

@@ -70,6 +70,18 @@ private:
 
     void sync_if_needed(int64_t block_sample_index, span<const float> output_block);
 
+    struct CycleBoundsResult {
+        unsigned sample_index_into_loop;
+        span<float> input_block_part;
+        unsigned block_sample_index_in_cycle;
+        unsigned next_block_phase;
+    };
+    // Helper to compute indices about where the current block stands relative to the looped test signal cycle.
+    // Updates mt_state.active_command->test_signal_begin_sample_index, too.
+    CycleBoundsResult compute_cycle_bounds(
+      int64_t block_sample_index, unsigned cycle_length_samples, unsigned period_samples, span<float> input_block
+    );
+
     // Fill `input_block` with the reproduced input signal, return the phase (sample index) of the sample
     // right after `input_block.back()`, which will be 0 .. mt_state.test_signal_period_samples
     unsigned reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block);
