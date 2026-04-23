@@ -1,6 +1,7 @@
 #include "CompressorProbeMessageThreadState.h"
 
 #include "CompressorProbeEditor.h"
+#include "config.h"
 #include "juce_util/misc.h"
 
 #include <meadow/cppext.h>
@@ -71,7 +72,51 @@ void CompressorProbeMessageThreadState::on_ui_refresh_timer_elapsed()
 
 void CompressorProbeMessageThreadState::update_wave_scope()
 {
-    if (auto* e = get_active_editor_fn()) {
-        e->wave_scope.update(compressor_input_samples_tail, compressor_output_samples_tail);
+    if (auto* e = get_active_editor_fn(); e && sample_rate) {
+        const auto num_wave_scope_samples = iround<int>(k_wave_scope_duration_sec * *sample_rate);
+        // Pick a section of compressor_input_samples_tail and compressor_output_samples_tail such that the last sample
+        // has always the same phase.
+        const auto M = compressor_input_samples_tail.size();
+        CHECK(compressor_output_samples_tail.size() == M);
+        const auto te = std::max<ptrdiff_t>(0, signed_subtract(M, input_output_next_sample_index_within_period));
+        const auto tb = std::max<ptrdiff_t>(0, te - num_wave_scope_samples);
+        e->wave_scope.update(
+          span(compressor_input_samples_tail.data() + tb, sucast(te - tb)),
+          span(compressor_output_samples_tail.data() + tb, sucast(te - tb))
+        );
     }
+}
+
+vector<pair<double, double>> CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::input_to_output_db() const
+{
+    using Item = CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::Item;
+    auto to_vdd = [](const deque<Item>& items) {
+        vector<pair<double, double>> xs;
+        xs.reserve(items.size());
+        for (auto& i : items) {
+            xs.push_back({i.input_db, i.output_db});
+        }
+        return xs;
+    };
+    auto asc = to_vdd(ascending);
+    ra::sort(asc);
+    auto desc = to_vdd(descending);
+    ra::sort(
+      desc,
+      [](double a, double b) {
+          return b < a;
+      },
+      &pair<double, double>::first
+    );
+    asc.append_range(desc);
+    return asc;
+}
+
+vector<pair<double, double>> CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::input_to_gr_db() const
+{
+    auto xs = input_to_output_db();
+    for (auto& x : xs) {
+        x.second = x.second - x.first;
+    }
+    return xs;
 }

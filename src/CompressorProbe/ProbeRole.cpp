@@ -11,6 +11,8 @@
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
 #include <meadow/enum.h>
+#include <meadow/evariant.h>
+#include <meadow/matlab.h>
 
 ProbeRole::ProbeRole(CompressorProbeProcessor& processor_arg)
     : processor(processor_arg)
@@ -43,9 +45,6 @@ void ProbeRole::prepare_to_play(double sample_rate, int samples_per_block)
     for (auto& x : received_audio_blocks) {
         x.channels_samples = channels_samples;
     }
-    processor.call_async_on_mt([this, sample_rate] {
-        mt_state.decibel_cycle_loop_generator = DecibelCycleLoopGenerator(sample_rate);
-    });
 }
 
 void ProbeRole::release_resources()
@@ -189,17 +188,31 @@ void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block)
           chr::duration_cast<chr::microseconds>(chr::steady_clock::now() - response.command_received_timestamp).count()
         );
     }
-    mt_state.active_command = ActiveCommand{
-      .command = *mt_state.pending_command, .command_received_timestamp = response.command_received_timestamp
-    };
-    switch (enum_of(mt_state.active_command->command.mode)) {
+    if (!processor.mt_state.sample_rate) {
+        mt_state.active_command.reset();
+        mt_state.pending_command.reset();
+        LOG(WARNING) << "Received a response to a command before sample rate was set.";
+        return;
+    }
+
+    AnalyzerWorkspace::V analyzer_workspace;
+    switch (enum_of(mt_state.pending_command->mode)) {
     case Mode::E::Bypass:
+        mt_state.test_signal_period_samples = 0;
+        analyzer_workspace = AnalyzerWorkspace::Bypass{};
         break;
-    EVARIANT_CASE(mt_state.active_command->command.mode, Mode, DecibelCycle, x) {
-        // Update the decibel cycle loop generator's parameter dependent data, so we can use cycle_length_samples later.
-        mt_state.decibel_cycle_loop_generator.generate_block(x, 0, span<float>());
+    EVARIANT_CASE(mt_state.pending_command->mode, Mode, DecibelCycle, x) {
+        auto dc = AnalyzerWorkspace::DecibelCycle(x, *processor.mt_state.sample_rate);
+        mt_state.test_signal_period_samples =
+          iicast<unsigned>(dc.decibel_cycle_loop_generator.normalized_period.samples.size());
+        analyzer_workspace = MOVE(dc);
     } break;
     }
+    mt_state.active_command = ActiveCommand{
+      .command = *mt_state.pending_command,
+      .command_received_timestamp = response.command_received_timestamp,
+      .analyzer_workspace = MOVE(analyzer_workspace)
+    };
     mt_state.pending_command.reset();
 }
 
@@ -215,8 +228,6 @@ void ProbeRole::on_mode_changed_mt()
     if (mt_state.pipe->send_message(command_as_span(new_command))) {
         mt_state.pending_command = new_command;
         mt_state.active_command.reset();
-        mt_state.compressor_output_blocks_tail.clear();
-        mt_state.corrs.clear();
     } else {
         processor.mt_state.error = format("Failed to send command#{} to generator.", new_command.command_index);
     }
@@ -239,7 +250,8 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
     }
 
     auto sample_rate = *sample_rate_or;
-    const auto num_wave_scope_samples = iround<size_t>(k_wave_scope_duration_sec * sample_rate);
+    const auto num_wave_scope_samples =
+      iround<size_t>(k_wave_scope_duration_sec * sample_rate) + mt_state.test_signal_period_samples;
 
     auto& input_samples_tail = processor.mt_state.compressor_input_samples_tail;
     auto& output_samples_tail = processor.mt_state.compressor_output_samples_tail;
@@ -284,7 +296,8 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
         sync_if_needed(rab_msg.block_sample_index, output_block);
         if (mt_state.active_command && mt_state.active_command->test_signal_begin_sample_index) {
             mt_state.compressor_input_block.resize(N);
-            reproduce_compressor_input_block_mt(rab_msg.block_sample_index, mt_state.compressor_input_block);
+            processor.mt_state.input_output_next_sample_index_within_period =
+              reproduce_compressor_input_block_mt(rab_msg.block_sample_index, mt_state.compressor_input_block);
             analyze_compressed_block_mt(mt_state.compressor_input_block, mt_state.compressor_output_block);
         } else {
             mt_state.compressor_input_block.assign(N, 0.0f);
@@ -316,7 +329,7 @@ void ProbeRole::sync_if_needed(int64_t block_sample_index, span<const float> out
     }
 
     // Look for sync marker starting with the previous compressed block.
-    auto& compressor_output_tail = mt_state.compressor_output_blocks_tail;
+    auto& compressor_output_tail = mt_state.active_command->compressor_output_blocks_tail;
     // Keep the size of compressed_blocks_tail at a minimum.
     const auto sync_signal = get_sync_signal();
     const auto sync_size = sync_signal.size();
@@ -337,33 +350,35 @@ void ProbeRole::sync_if_needed(int64_t block_sample_index, span<const float> out
 
     optional<ptrdiff_t> sync_detected_pos;
 
+    auto& corrs = mt_state.active_command->sync_corrs;
+
     for (auto i = begin_pos; i <= end_pos; ++i) {
         const auto signal_to_test = span(compressor_output_tail.data() + i, sync_size);
         if (!test_sync_signal(signal_to_test)) {
-            mt_state.corrs.clear();
+            corrs.clear();
             continue;
         }
         const auto corr = normalized_correlation(signal_to_test, sync_signal);
         if (corr < k_min_corr) {
-            mt_state.corrs.clear();
+            corrs.clear();
             continue;
         }
-        switch (mt_state.corrs.size()) {
+        switch (corrs.size()) {
         case 0:
-            mt_state.corrs.push_back(corr);
+            corrs.push_back(corr);
             break;
         case 1:
-            if (mt_state.corrs.back() < corr) {
-                mt_state.corrs.push_back(corr);
+            if (corrs.back() < corr) {
+                corrs.push_back(corr);
             } else {
-                mt_state.corrs.assign(1, corr);
+                corrs.assign(1, corr);
             }
             // if size == 2, it will be increasing
             break;
         case 2:
-            if (mt_state.corrs.back() < corr) {
+            if (corrs.back() < corr) {
                 // Keeps on increasing.
-                mt_state.corrs = {mt_state.corrs.back(), corr};
+                corrs = {corrs.back(), corr};
             } else {
                 // Peaked at the last sample.
                 sync_detected_pos = i - 1;
@@ -385,19 +400,23 @@ void ProbeRole::sync_if_needed(int64_t block_sample_index, span<const float> out
     LOG(INFO) << "Sync detected";
 }
 
-void ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block)
+unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block)
 {
     CHECK(mt_state.active_command && mt_state.active_command->test_signal_begin_sample_index);
     auto& test_signal_begin_sample_index = *mt_state.active_command->test_signal_begin_sample_index;
 
     switch (enum_of(mt_state.active_command->command.mode)) {
     case Mode::E::Bypass:
-        break;
+        return 0;
     EVARIANT_CASE(mt_state.active_command->command.mode, Mode, DecibelCycle, x) {
+        auto& aw = mt_state.active_command->analyzer_workspace;
+        auto* awdc = std::get_if<AnalyzerWorkspace::DecibelCycle>(&aw);
+        CHECK(awdc);
+        auto& wsp = *awdc;
         // Find the start of the most recent cycle.
         while (block_sample_index - test_signal_begin_sample_index
-               >= mt_state.decibel_cycle_loop_generator.cycle_length_samples) {
-            test_signal_begin_sample_index += mt_state.decibel_cycle_loop_generator.cycle_length_samples;
+               >= wsp.decibel_cycle_loop_generator.cycle_length_samples) {
+            test_signal_begin_sample_index += wsp.decibel_cycle_loop_generator.cycle_length_samples;
         }
         size_t start_sample; // In the current block
         if (test_signal_begin_sample_index <= block_sample_index) {
@@ -407,18 +426,96 @@ void ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_index, 
             std::fill_n(input_block.begin(), start_sample, 0.0f);
         }
         const auto sample_index_into_loop = block_sample_index + uscast(start_sample) - test_signal_begin_sample_index;
-        CHECK(in_co_range(sample_index_into_loop, 0, mt_state.decibel_cycle_loop_generator.cycle_length_samples));
-        mt_state.decibel_cycle_loop_generator.generate_block(
+        CHECK(in_co_range(sample_index_into_loop, 0, wsp.decibel_cycle_loop_generator.cycle_length_samples));
+        wsp.decibel_cycle_loop_generator.generate_block(
           x,
           iicast<unsigned>(sample_index_into_loop),
           span(input_block.data() + start_sample, input_block.size() - start_sample)
         );
-    } break;
+        wsp.block_sample_index_in_cycle = modulo(
+          signed_subtract(sample_index_into_loop, start_sample), wsp.decibel_cycle_loop_generator.cycle_length_samples
+        );
+        return iicast<unsigned>(
+          (sucast(sample_index_into_loop) + input_block.size() - start_sample)
+          % wsp.decibel_cycle_loop_generator.normalized_period.samples.size()
+        );
+    }
     }
 }
 
 void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<const float> output_block)
 {
-    (void)input_block;
-    (void)output_block;
+    const auto N = input_block.size();
+    CHECK(output_block.size() == N);
+
+    CHECK(mt_state.active_command);
+    auto& aw = mt_state.active_command->analyzer_workspace;
+    switch (enum_of(aw)) {
+    case AnalyzerWorkspace::E::Bypass:
+        break;
+    EVARIANT_CASE(aw, AnalyzerWorkspace, DecibelCycle, x) {
+        // Find the energies of periods in the input/output samples.
+        const auto P = x.decibel_cycle_loop_generator.normalized_period.samples.size();
+        auto& aodc = processor.mt_state.ao.decibel_cycle;
+        for (unsigned i = 0; i < N; ++i) {
+            x.input_period_sum2 += square(input_block[i]);
+            x.output_period_sum2 += square(output_block[i]);
+            const bool finished_last_sample_of_period = (x.block_sample_index_in_cycle + i + 1) % P == 0;
+            if (finished_last_sample_of_period) {
+                const auto input_db = matlab::pow2db(x.input_period_sum2 / ifcast<double>(P));
+                const auto output_db = matlab::pow2db(x.output_period_sum2 / ifcast<double>(P));
+                x.input_period_sum2 = 0.0;
+                x.output_period_sum2 = 0.0;
+                if (x.previous_input_db) {
+                    const bool ascending = input_db > *x.previous_input_db;
+                    if (ascending) {
+                        auto& xs = aodc.ascending;
+                        if (xs.empty() || xs.back().input_db >= input_db) {
+                            // Changed direction, this is the first ascending item in the current cycle.
+                            aodc.first_ascending_seq_index = aodc.seq_index;
+                            // Remove descending items before their first.
+                            auto& ys = aodc.descending;
+                            while (!ys.empty() && ys.front().seq_index < aodc.first_descending_seq_index) {
+                                ys.pop_front();
+                            }
+                        }
+                        // Remove old items less than this.
+                        while (!xs.empty() && xs.front().input_db <= input_db
+                               && xs.front().seq_index < aodc.first_ascending_seq_index) {
+                            xs.pop_front();
+                        }
+                        xs.push_back(
+                          CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::Item{
+                            aodc.seq_index++, input_db, output_db
+                          }
+                        );
+                    } else {
+                        // Descending.
+                        auto& xs = aodc.descending;
+                        if (xs.empty() || xs.back().input_db <= input_db) {
+                            // Changed direction, this is the first descending item in the current cycle.
+                            aodc.first_descending_seq_index = aodc.seq_index;
+                            // Remove ascending items before their first.
+                            auto& ys = aodc.ascending;
+                            while (!ys.empty() && ys.front().seq_index < aodc.first_ascending_seq_index) {
+                                ys.pop_front();
+                            }
+                        }
+                        // Remove old items greater than this.
+                        while (!xs.empty() && xs.front().input_db >= input_db
+                               && xs.front().seq_index < aodc.first_descending_seq_index) {
+                            xs.pop_front();
+                        }
+                        xs.push_back(
+                          CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::Item{
+                            aodc.seq_index++, input_db, output_db
+                          }
+                        );
+                    }
+                }
+                x.previous_input_db = input_db;
+            }
+        }
+    } break;
+    }
 }

@@ -69,7 +69,11 @@ private:
     void on_pipe_message_received_mt(span<const char> memory_block);
 
     void sync_if_needed(int64_t block_sample_index, span<const float> output_block);
-    void reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block);
+
+    // Fill `input_block` with the reproduced input signal, return the phase (sample index) of the sample
+    // right after `input_block.back()`, which will be 0 .. mt_state.test_signal_period_samples
+    unsigned reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block);
+
     void analyze_compressed_block_mt(span<const float> input_block, span<const float> output_block);
 
     // Audio thread variables and functions

@@ -20,7 +20,21 @@ public:
     optional<string> generator_command;
     optional<string> error;
     std::vector<float> compressor_input_samples_tail, compressor_output_samples_tail;
-    optional<double> sample_rate; // Valid when prepared to play.
+    unsigned input_output_next_sample_index_within_period = 0; // Can be used to lock scope to period.
+    optional<double> sample_rate;                              // Valid when prepared to play.
+    struct AnalyzerOutput {
+        struct DecibelCycle {
+            struct Item {
+                int64_t seq_index;
+                double input_db, output_db;
+            };
+            deque<Item> ascending, descending;
+            int64_t seq_index = 0;
+            int64_t first_ascending_seq_index = 0, first_descending_seq_index = 0;
+            vector<pair<double, double>> input_to_output_db() const;
+            vector<pair<double, double>> input_to_gr_db() const;
+        } decibel_cycle;
+    } ao;
 
     CompressorProbeMessageThreadState(
       juce::AudioProcessor& processor_to_connect_to, function<CompressorProbeEditor*()> get_active_editor_fn_arg
