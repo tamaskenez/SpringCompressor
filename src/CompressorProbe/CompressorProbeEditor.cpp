@@ -157,7 +157,7 @@ void CompressorProbeEditor::refresh_ui()
 
 void CompressorProbeEditor::refresh_generator_ui()
 {
-    const auto generator_id = ts_state.generator_id.load();
+    const auto generator_id = ts_state.generator_id_in_generator.load();
     if (generator_id != k_invalid_generator_id)
         title_label.setText("Generator #" + juce::String(generator_id), juce::dontSendNotification);
     else
@@ -181,7 +181,7 @@ void CompressorProbeEditor::refresh_probe_ui()
     if (!ts_state.prepared_to_play) {
         role_label.setText("Start the audio engine to begin", juce::dontSendNotification);
     } else {
-        if (auto generator_id = ts_state.generator_id.load(); generator_id != k_invalid_generator_id) {
+        if (auto generator_id = ts_state.generator_id_in_probe.load(); generator_id != k_invalid_generator_id) {
             role_label.setText("Connected to generator #" + juce::String(generator_id), juce::dontSendNotification);
         } else {
             role_label.setText("Connecting to the generator", juce::dontSendNotification);
@@ -189,7 +189,7 @@ void CompressorProbeEditor::refresh_probe_ui()
     }
 
     addAndMakeVisible(mode.combo);
-    mode.combo.setEnabled(ts_state.generator_id.load() != k_invalid_generator_id);
+    mode.combo.setEnabled(ts_state.generator_id_in_probe.load() != k_invalid_generator_id);
 
     const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
     decibel_cycle_panel->setVisible(is_decibel_cycle);

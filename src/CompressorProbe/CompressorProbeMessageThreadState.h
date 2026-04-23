@@ -19,7 +19,7 @@ public:
     function<CompressorProbeEditor*()> get_active_editor_fn;
     optional<string> generator_command;
     optional<string> error;
-    std::vector<float> incoming_samples;
+    std::vector<float> compressor_input_samples_tail, compressor_output_samples_tail;
     optional<double> sample_rate; // Valid when prepared to play.
 
     CompressorProbeMessageThreadState(

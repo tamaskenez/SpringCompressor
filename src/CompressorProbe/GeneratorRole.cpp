@@ -5,6 +5,7 @@
 #include "ProbeProtocol.h"
 #include "juce_util/logging.h"
 #include "pipes.h"
+#include "sync.h"
 
 #include <magic_enum/magic_enum.hpp>
 #include <meadow/cppext.h>
@@ -71,7 +72,7 @@ GeneratorRole::GeneratorRole(CompressorProbeProcessor& processor_arg)
     new_pipe->on_message_received = [this](span<const char> memory_block) {
         on_pipe_message_received_mt(memory_block);
     };
-    processor.ts_state.generator_id = new_id;
+    processor.ts_state.generator_id_in_generator = new_id;
     mt.pipe = MOVE(new_pipe);
 
     tone_buf = build_tone_buffer(iicast<uint16_t>(new_id));
@@ -81,10 +82,11 @@ GeneratorRole::GeneratorRole(CompressorProbeProcessor& processor_arg)
 GeneratorRole::~GeneratorRole() = default;
 
 // Might be called on audio thread, but strictly before process_block.
-void GeneratorRole::prepare_to_play(double sample_rate, int /*samples_per_block*/)
+void GeneratorRole::prepare_to_play(double sample_rate, int samples_per_block)
 {
     tone_playhead = 0;
     decibel_cycle_loop_generator = DecibelCycleLoopGenerator(sample_rate);
+    output_block.resize(sucast(samples_per_block));
 }
 
 void GeneratorRole::release_resources()
@@ -92,8 +94,12 @@ void GeneratorRole::release_resources()
     processor.ts_state.generator_status.store(GeneratorStatus::Idle);
 }
 
-void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer)
+void GeneratorRole::process_block(int64_t /*block_sample_index*/, juce::AudioBuffer<float>& buffer)
 {
+    auto& prepared_to_play = processor.common_state.prepared_to_play;
+    LOG_IF(FATAL, !prepared_to_play) << "GeneratorRole::process_block called without prepare_to_play";
+    const auto sample_rate = prepared_to_play->sample_rate;
+
     bool got_new_command = false;
     {
         Command cmd(nullopt);
@@ -111,6 +117,8 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer)
             mt.pipe->send_message(response_as_span(response));
         });
         tone_playhead = 0;
+        silent_samples_after_new_command = iround<size_t>(sample_rate * k_silence_after_new_command_sec);
+        sync_signal_to_transmit = get_sync_signal();
     }
     const unsigned N = sucast(buffer.getNumSamples());
     CHECK(buffer.getNumChannels() == 1 || buffer.getNumChannels() == 2);
@@ -129,17 +137,47 @@ void GeneratorRole::process_block(juce::AudioBuffer<float>& buffer)
         }
     } break;
     case GeneratorStatus::Connected:
-        switch (enum_of(current_command->mode)) {
-        case Mode::E::Bypass:
-            // TODO add high frequency GR track signal.
-            break;
-        EVARIANT_CASE(current_command->mode, Mode, DecibelCycle, x) {
-            decibel_cycle_loop_generator.generate_block(x, tone_playhead, span(buffer.getArrayOfWritePointers()[0], N));
-            tone_playhead = (tone_playhead + N) % decibel_cycle_loop_generator.cycle_length_samples;
-            if (buffer.getNumChannels() == 2) {
-                std::copy_n(buffer.getArrayOfWritePointers()[0], N, buffer.getArrayOfWritePointers()[1]);
+        output_block.reserve(N);
+        output_block.clear();
+        if (silent_samples_after_new_command > 0) {
+            const auto M = std::min<size_t>(N, silent_samples_after_new_command);
+            output_block.assign(M, 0.0f);
+            silent_samples_after_new_command -= M;
+        }
+        if (silent_samples_after_new_command == 0 && !sync_signal_to_transmit.empty()) {
+            const auto num_samples_left = N - output_block.size();
+            const auto M = std::min<size_t>(num_samples_left, sync_signal_to_transmit.size());
+            output_block.insert(
+              output_block.end(), sync_signal_to_transmit.begin(), sync_signal_to_transmit.begin() + uscast(M)
+            );
+            remove_prefix(sync_signal_to_transmit, M);
+        }
+        // Overwrite the first samples with output block.
+        // Leave the rest.
+        std::copy_n(output_block.begin(), output_block.size(), buffer.getArrayOfWritePointers()[0]);
+        if (buffer.getNumChannels() == 2) {
+            std::copy_n(output_block.begin(), output_block.size(), buffer.getArrayOfWritePointers()[1]);
+        }
+        if (output_block.size() < N) {
+            switch (enum_of(current_command->mode)) {
+            case Mode::E::Bypass:
+                // TODO add high frequency GR track signal.
+                break;
+            EVARIANT_CASE(current_command->mode, Mode, DecibelCycle, x) {
+                const auto M = N - output_block.size();
+                decibel_cycle_loop_generator.generate_block(
+                  x, tone_playhead, span(buffer.getArrayOfWritePointers()[0] + output_block.size(), M)
+                );
+                tone_playhead = (tone_playhead + M) % decibel_cycle_loop_generator.cycle_length_samples;
+                if (buffer.getNumChannels() == 2) {
+                    std::copy_n(
+                      buffer.getArrayOfWritePointers()[0] + output_block.size(),
+                      M,
+                      buffer.getArrayOfWritePointers()[1] + output_block.size()
+                    );
+                }
+            } break;
             }
-        } break;
         }
     }
 }

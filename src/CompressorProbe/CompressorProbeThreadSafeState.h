@@ -21,7 +21,8 @@ struct CompressorProbeThreadSafeState {
     std::atomic<int> num_channels = k_default_buses_layout.size();
     std::atomic<RoleInterface*> role_impl;
     std::atomic<GeneratorStatus> generator_status{GeneratorStatus::Idle}; // Only when role is generator.
-    std::atomic<int> generator_id = k_invalid_generator_id;
+    std::atomic<int> generator_id_in_probe = k_invalid_generator_id;
+    std::atomic<int> generator_id_in_generator = k_invalid_generator_id;
     std::atomic<bool> prepared_to_play;
 
     explicit CompressorProbeThreadSafeState(juce::AudioProcessor* instance);

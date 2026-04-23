@@ -54,6 +54,14 @@ juce::AudioProcessorEditor* CompressorProbeProcessor::createEditor()
 
     auto* p = new CompressorProbeEditor(*this, ts_state, mt_state, this);
     mt_state.update_channels_on_editor(ts_state.get_role(), ts_state.num_channels.load(), p);
+
+    if (k_development_mode && !development_mode.generator) {
+        development_mode.generator = make_unique<GeneratorRole>(*this);
+        call_async_on_mt([this] {
+            on_role_selected_by_user_mt(Role::Probe);
+        });
+    }
+
     return p;
 }
 
@@ -64,6 +72,9 @@ void CompressorProbeProcessor::on_ui_refresh_timer_elapsed_mt()
     auto a = ts_state.file_log_sink->activate();
     if (auto* p = ts_state.role_impl.load()) {
         p->on_ui_refresh_timer_elapsed_mt();
+    }
+    if (k_development_mode && development_mode.generator) {
+        development_mode.generator->on_ui_refresh_timer_elapsed_mt();
     }
     mt_state.on_ui_refresh_timer_elapsed();
 }
@@ -95,6 +106,11 @@ void CompressorProbeProcessor::on_role_selected_by_user_mt(Role new_role)
         role_impl_storage->prepare_to_play(
           common_state.prepared_to_play->sample_rate, common_state.prepared_to_play->samples_per_block
         );
+        if (k_development_mode && development_mode.generator) {
+            development_mode.generator->prepare_to_play(
+              common_state.prepared_to_play->sample_rate, common_state.prepared_to_play->samples_per_block
+            );
+        }
     }
 
     // The following line signals to the potentially simultaneous processBlock calls that the current role is active,
@@ -115,7 +131,7 @@ void CompressorProbeProcessor::prepareToPlay(double sample_rate, int samples_per
 
     auto lock = std::scoped_lock(mutex);
 
-    ts_state.generator_id = k_invalid_generator_id;
+    ts_state.generator_id_in_probe = k_invalid_generator_id;
     CHECK(!common_state.prepared_to_play);
     common_state.prepared_to_play = {sample_rate, samples_per_block};
     call_async_on_mt([this, sample_rate]() {
@@ -124,7 +140,11 @@ void CompressorProbeProcessor::prepareToPlay(double sample_rate, int samples_per
     if (auto* p = ts_state.role_impl.load()) {
         p->prepare_to_play(sample_rate, samples_per_block);
     }
+    if (k_development_mode && development_mode.generator) {
+        development_mode.generator->prepare_to_play(sample_rate, samples_per_block);
+    }
     ts_state.prepared_to_play = true;
+    at.block_sample_index = 0;
 }
 
 void CompressorProbeProcessor::releaseResources()
@@ -141,6 +161,9 @@ void CompressorProbeProcessor::releaseResources()
 
     if (auto* p = ts_state.role_impl.load()) {
         p->release_resources();
+    }
+    if (k_development_mode && development_mode.generator) {
+        development_mode.generator->release_resources();
     }
     common_state.prepared_to_play.reset();
     call_async_on_mt([this]() {
@@ -189,11 +212,18 @@ void CompressorProbeProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 {
     juce::ScopedNoDenormals no_denormals;
 
+    if (k_development_mode && development_mode.generator) {
+        development_mode.generator->process_block(at.block_sample_index, buffer);
+        buffer.applyGain(0.5);
+    }
+
     if (auto* p = ts_state.role_impl.load()) {
-        p->process_block(buffer);
+        p->process_block(at.block_sample_index, buffer);
     } else {
         buffer.clear();
     }
+
+    at.block_sample_index += buffer.getNumSamples();
 }
 
 // ==== Functions called on any thread, including audio. ====

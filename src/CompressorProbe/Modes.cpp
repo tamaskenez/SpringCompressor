@@ -104,7 +104,8 @@ void DecibelCycleLoopGenerator::generate_block(
         min_dbfs = std::min(params.min_dbfs, max_dbfs_without_distortion);
         max_dbfs = std::min(params.max_dbfs, max_dbfs_without_distortion);
         num_periods = iround<unsigned>(
-          k_decibel_cycle_lengths_msec.at(params.cycle_length_index) / 1000.0 * fs / normalized_period.samples.size()
+          k_decibel_cycle_lengths_msec.at(params.cycle_length_index) / 1000.0 * fs
+          / ifcast<double>(normalized_period.samples.size())
         );
         cycle_length_samples = iicast<unsigned>(normalized_period.samples.size() * num_periods);
     }

@@ -21,7 +21,7 @@ public:
     ~GeneratorRole() override;
 
     void prepare_to_play(double sample_rate, int samples_per_block) override;
-    void process_block(juce::AudioBuffer<float>& buffer) override;
+    void process_block(int64_t block_sample_index, juce::AudioBuffer<float>& buffer) override;
     void release_resources() override;
     void on_ui_refresh_timer_elapsed_mt() override {}
     Role get_role() const override
@@ -46,6 +46,9 @@ private:
     unsigned tone_playhead = 0;
     optional<Command> current_command;
     DecibelCycleLoopGenerator decibel_cycle_loop_generator;
+    size_t silent_samples_after_new_command = 0;
+    span<const float> sync_signal_to_transmit;
+    vector<float> output_block;
 
     // Thread-safe communication between audio and message threads
     moodycamel::ReaderWriterQueue<Command> message_to_audio_queue;

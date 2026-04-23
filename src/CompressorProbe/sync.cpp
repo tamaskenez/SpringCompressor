@@ -35,8 +35,6 @@ array<float, k_sync_signal_digit_length_samples> generate_ref_period()
 
 const auto k_sync_ref_period = generate_ref_period();
 
-} // namespace
-
 // Generate BPSK-style sync signal.
 // - generate k_sync_signal_num_digits random binary digits, from a fixed seed so it'll be the same every time.
 // - generate a single period of sine, amplitude: k_sync_signal_amplitude_dbfs
@@ -59,6 +57,14 @@ vector<float> make_sync_signal()
         }
     }
     return result;
+}
+
+const auto k_sync_signal = make_sync_signal();
+} // namespace
+
+span<const float> get_sync_signal()
+{
+    return k_sync_signal;
 }
 
 // Perform normalized correlation of x and y.

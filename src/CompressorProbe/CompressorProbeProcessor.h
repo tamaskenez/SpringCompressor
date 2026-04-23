@@ -77,6 +77,14 @@ private:
     std::mutex mutex;
     unique_ptr<RoleInterface> role_impl_storage;
 
+    struct AudioThreadState {
+        int64_t block_sample_index = 0;
+    } at;
+
+    struct DevelopmentMode {
+        unique_ptr<GeneratorRole> generator;
+    } development_mode;
+
     // this_lifetime_token_mutex is intentionally not a std::shared_mutex, because we need to keep it
     // alive even when the object is destructed.
     shared_ptr<std::mutex> this_lifetime_token_mutex = make_shared<std::mutex>();

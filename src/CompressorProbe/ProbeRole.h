@@ -6,6 +6,7 @@
 #include "RoleInterface.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <meadow/cppext.h>
 #include <readerwriterqueue/readerwriterqueue.h>
 
 #include <array>
@@ -47,7 +48,7 @@ public:
     explicit ProbeRole(CompressorProbeProcessor& processor_arg);
 
     void prepare_to_play(double sample_rate, int samples_per_block) override;
-    void process_block(juce::AudioBuffer<float>& buffer) override;
+    void process_block(int64_t block_sample_index, juce::AudioBuffer<float>& buffer) override;
     void release_resources() override;
     void on_ui_refresh_timer_elapsed_mt() override;
     Role get_role() const override
@@ -66,24 +67,31 @@ private:
     ProbeRoleState mt_state;
     void on_generator_id_decoded_mt(int id);
     void on_pipe_message_received_mt(span<const char> memory_block);
-    void analyze_compressed_block_mt(const vector<float>& compressed_block);
+
+    void sync_if_needed(int64_t block_sample_index, span<const float> output_block);
+    void reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block);
+    void analyze_compressed_block_mt(span<const float> input_block, span<const float> output_block);
 
     // Audio thread variables and functions
 
     // One Goertzel filter per bin; coefficients are set in the constructor.
     struct AudioThreadState {
-        std::array<GoertzelFilter, ProbeProtocol::id_bins.size()> filters{};
+        array<GoertzelFilter, ProbeProtocol::id_bins.size()> filters{};
         int sample_count = 0;
         int last_decoded_id = -1; // most recently decoded ID, -1 = none yet
         int confirm_count = 0;    // consecutive frames with the same decoded ID
-        std::optional<int> confirmed_generator_id;
+        optional<int> confirmed_generator_id;
         size_t next_rab_to_check = 0;
     } at;
 
     void process_frame();
 
     // Shared between audio and message thread.
-    moodycamel::ReaderWriterQueue<size_t> audio_to_message_queue; // Indices into received_audio_blocks.
+    struct RABToMt {
+        int64_t block_sample_index;
+        size_t rab_index;
+    };
+    moodycamel::ReaderWriterQueue<RABToMt> audio_to_message_queue; // Indices into received_audio_blocks.
 
     // vector is constructed before audio thread, item access is synchronized.
     vector<ReceivedAudioBlock> received_audio_blocks;
