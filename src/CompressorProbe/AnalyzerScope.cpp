@@ -16,9 +16,9 @@ void AnalyzerScope::resized()
     plot_image = juce::Image(juce::Image::ARGB, juce::jmax(1, area.getWidth()), juce::jmax(1, area.getHeight()), true);
 }
 
-void AnalyzerScope::update(span<const Point> ascending, span<const Point> descending)
+void AnalyzerScope::update(span<const Point> compressor_curve, size_t last_item_index)
 {
-    if (!plot_image.isValid()) {
+    if (!plot_image.isValid() || compressor_curve.empty()) {
         return;
     }
 
@@ -35,6 +35,29 @@ void AnalyzerScope::update(span<const Point> ascending, span<const Point> descen
         return {x, y};
     };
 
+    auto is_valid = [&](const Point& p) {
+        return p.input_db >= k_db_min && p.input_db <= k_db_max && p.output_db >= k_db_min && p.output_db <= k_db_max;
+    };
+
+    auto make_path = [&](span<const Point> pts) {
+        juce::Path path;
+        bool started = false;
+        for (auto& p : pts) {
+            if (!is_valid(p)) {
+                started = false;
+                continue;
+            }
+            auto px = to_px(p.input_db, p.output_db);
+            if (!started) {
+                path.startNewSubPath(px.x, px.y);
+                started = true;
+            } else {
+                path.lineTo(px.x, px.y);
+            }
+        }
+        return path;
+    };
+
     juce::Graphics g(plot_image);
     g.fillAll(juce::Colours::black);
 
@@ -46,20 +69,22 @@ void AnalyzerScope::update(span<const Point> ascending, span<const Point> descen
         g.drawLine(p0.x, p0.y, p1.x, p1.y, 1.0f);
     }
 
-    constexpr float dot_r = 2.0f;
-    auto draw_points = [&](span<const Point> pts, juce::Colour colour) {
-        g.setColour(colour);
-        for (auto& p : pts) {
-            if (p.input_db >= k_db_min && p.input_db <= k_db_max && p.output_db >= k_db_min
-                && p.output_db <= k_db_max) {
-                auto px = to_px(p.input_db, p.output_db);
-                g.fillEllipse(px.x - dot_r, px.y - dot_r, 2.0f * dot_r, 2.0f * dot_r);
-            }
-        }
-    };
+    juce::PathStrokeType stroke(1.5f);
+    const auto mid = compressor_curve.size() / 2;
+    g.setColour(juce::Colours::green);
+    g.strokePath(make_path(compressor_curve.subspan(0, mid)), stroke);
+    g.setColour(juce::Colours::red);
+    g.strokePath(make_path(compressor_curve.subspan(mid)), stroke);
 
-    draw_points(descending, juce::Colours::red);
-    draw_points(ascending, juce::Colours::green);
+    if (last_item_index < compressor_curve.size()) {
+        const auto& last_pt = compressor_curve[last_item_index];
+        if (is_valid(last_pt)) {
+            constexpr float dot_r = 3.0f;
+            auto px = to_px(last_pt.input_db, last_pt.output_db);
+            g.setColour(juce::Colours::white);
+            g.fillEllipse(px.x - dot_r, px.y - dot_r, 2.0f * dot_r, 2.0f * dot_r);
+        }
+    }
 
     repaint();
 }

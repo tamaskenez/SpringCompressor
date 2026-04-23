@@ -204,6 +204,7 @@ void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block)
         auto dc = AnalyzerWorkspace::DecibelCycle(x, *processor.mt_state.sample_rate);
         mt_state.test_signal_period_samples =
           iicast<unsigned>(dc.decibel_cycle_loop_generator.normalized_period.samples.size());
+        processor.mt_state.ao.decibel_cycle.compressor_curve.resize(dc.decibel_cycle_loop_generator.num_periods);
         analyzer_workspace = MOVE(dc);
     } break;
     }
@@ -467,6 +468,7 @@ void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<
         // Find the energies of periods in the input/output samples.
         const auto P = x.decibel_cycle_loop_generator.normalized_period.samples.size();
         auto& aodc = processor.mt_state.ao.decibel_cycle;
+        CHECK(aodc.compressor_curve.size() == x.decibel_cycle_loop_generator.num_periods);
         for (unsigned i = 0; i < N; ++i) {
             if (peak_ref) {
                 x.max_abs_input_period = std::max<double>(x.max_abs_input_period, abs(input_block[i]));
@@ -477,6 +479,8 @@ void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<
             }
             const bool finished_last_sample_of_period = (x.block_sample_index_in_cycle + i + 1) % P == 0;
             if (finished_last_sample_of_period) {
+                const auto period_index =
+                  ((x.block_sample_index_in_cycle + i) % x.decibel_cycle_loop_generator.cycle_length_samples) / P;
                 const auto [input_db, output_db] =
                   peak_ref ? pair(matlab::mag2db(x.max_abs_input_period), matlab::mag2db(x.max_abs_output_period))
                            : pair(
@@ -487,54 +491,8 @@ void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<
                 x.max_abs_output_period = 0.0;
                 x.input_period_sum2 = 0.0;
                 x.output_period_sum2 = 0.0;
-                if (x.previous_input_db) {
-                    const bool ascending = input_db > *x.previous_input_db;
-                    if (ascending) {
-                        auto& xs = aodc.ascending;
-                        if (xs.empty() || xs.back().input_db >= input_db) {
-                            // Changed direction, this is the first ascending item in the current cycle.
-                            aodc.first_ascending_seq_index = aodc.seq_index;
-                            // Remove descending items before their first.
-                            auto& ys = aodc.descending;
-                            while (!ys.empty() && ys.front().seq_index < aodc.first_descending_seq_index) {
-                                ys.pop_front();
-                            }
-                        }
-                        // Remove old items less than this.
-                        while (!xs.empty() && xs.front().input_db <= input_db
-                               && xs.front().seq_index < aodc.first_ascending_seq_index) {
-                            xs.pop_front();
-                        }
-                        xs.push_back(
-                          CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::Item{
-                            aodc.seq_index++, input_db, output_db
-                          }
-                        );
-                    } else {
-                        // Descending.
-                        auto& xs = aodc.descending;
-                        if (xs.empty() || xs.back().input_db <= input_db) {
-                            // Changed direction, this is the first descending item in the current cycle.
-                            aodc.first_descending_seq_index = aodc.seq_index;
-                            // Remove ascending items before their first.
-                            auto& ys = aodc.ascending;
-                            while (!ys.empty() && ys.front().seq_index < aodc.first_ascending_seq_index) {
-                                ys.pop_front();
-                            }
-                        }
-                        // Remove old items greater than this.
-                        while (!xs.empty() && xs.front().input_db >= input_db
-                               && xs.front().seq_index < aodc.first_descending_seq_index) {
-                            xs.pop_front();
-                        }
-                        xs.push_back(
-                          CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::Item{
-                            aodc.seq_index++, input_db, output_db
-                          }
-                        );
-                    }
-                }
-                x.previous_input_db = input_db;
+                aodc.compressor_curve[period_index] = {input_db, output_db};
+                aodc.last_item_index = period_index;
             }
         }
     } break;

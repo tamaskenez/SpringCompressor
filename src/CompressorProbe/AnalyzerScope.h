@@ -14,8 +14,9 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
 
-    // Plot (input_db, output_db) pairs. Ascending sweep drawn in green, descending in red.
-    void update(span<const Point> ascending, span<const Point> descending);
+    // Plot (input_db, output_db) pairs indexed by period. First half drawn in green (ascending), second in red
+    // (descending). Points with input_db == -INFINITY are skipped (not yet measured).
+    void update(span<const Point> compressor_curve, size_t last_item_index);
 
     juce::Image plot_image;
 

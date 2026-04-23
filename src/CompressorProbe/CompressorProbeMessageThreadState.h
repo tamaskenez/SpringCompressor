@@ -25,14 +25,10 @@ public:
     struct AnalyzerOutput {
         struct DecibelCycle {
             struct Item {
-                int64_t seq_index;
-                double input_db, output_db;
+                double input_db = -INFINITY, output_db = -INFINITY;
             };
-            deque<Item> ascending, descending;
-            int64_t seq_index = 0;
-            int64_t first_ascending_seq_index = 0, first_descending_seq_index = 0;
-            vector<pair<double, double>> input_to_output_db() const;
-            vector<pair<double, double>> input_to_gr_db() const;
+            vector<Item> compressor_curve;
+            size_t last_item_index = 0;
         } decibel_cycle;
     } ao;
 

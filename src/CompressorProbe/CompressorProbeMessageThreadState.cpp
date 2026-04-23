@@ -87,54 +87,16 @@ void CompressorProbeMessageThreadState::update_wave_scope()
         );
     }
 }
-
-vector<pair<double, double>> CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::input_to_output_db() const
-{
-    using Item = CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::Item;
-    auto to_vdd = [](const deque<Item>& items) {
-        vector<pair<double, double>> xs;
-        xs.reserve(items.size());
-        for (auto& i : items) {
-            xs.push_back({i.input_db, i.output_db});
-        }
-        return xs;
-    };
-    auto asc = to_vdd(ascending);
-    ra::sort(asc);
-    auto desc = to_vdd(descending);
-    ra::sort(
-      desc,
-      [](double a, double b) {
-          return b < a;
-      },
-      &pair<double, double>::first
-    );
-    asc.append_range(desc);
-    return asc;
-}
-
 void CompressorProbeMessageThreadState::update_analyzer_scope()
 {
     if (auto* e = get_active_editor_fn()) {
         auto& dc = ao.decibel_cycle;
-        vector<AnalyzerScope::Point> asc, desc;
-        asc.reserve(dc.ascending.size());
-        for (auto& item : dc.ascending) {
-            asc.push_back({item.input_db, item.output_db});
-        }
-        desc.reserve(dc.descending.size());
-        for (auto& item : dc.descending) {
-            desc.push_back({item.input_db, item.output_db});
-        }
-        e->analyzer_scope.update(asc, desc);
+        static_assert(sizeof(AnalyzerScope::Point) == sizeof(AnalyzerOutput::DecibelCycle::Item));
+        e->analyzer_scope.update(
+          span<const AnalyzerScope::Point>(
+            reinterpret_cast<const AnalyzerScope::Point*>(dc.compressor_curve.data()), dc.compressor_curve.size()
+          ),
+          dc.last_item_index
+        );
     }
-}
-
-vector<pair<double, double>> CompressorProbeMessageThreadState::AnalyzerOutput::DecibelCycle::input_to_gr_db() const
-{
-    auto xs = input_to_output_db();
-    for (auto& x : xs) {
-        x.second = x.second - x.first;
-    }
-    return xs;
 }

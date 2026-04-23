@@ -17,7 +17,6 @@ struct DecibelCycle {
     unsigned block_sample_index_in_cycle = 0;
     double input_period_sum2 = 0.0, output_period_sum2 = 0.0;
     double max_abs_input_period = 0.0, max_abs_output_period = 0.0;
-    optional<double> previous_input_db;
 
     DecibelCycle(const Mode::DecibelCycle& decibel_cycle_params, double sample_rate);
 };
