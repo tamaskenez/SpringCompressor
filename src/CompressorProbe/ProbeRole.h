@@ -86,7 +86,9 @@ private:
     // right after `input_block.back()`, which will be 0 .. mt_state.test_signal_period_samples
     unsigned reproduce_compressor_input_block_mt(int64_t block_sample_index, span<float> input_block);
 
-    void analyze_compressed_block_mt(span<const float> input_block, span<const float> output_block);
+    void analyze_compressed_block_mt(
+      span<const float> input_block, span<const float> output_block, bool last_block_in_batch
+    );
 
     // Audio thread variables and functions
 

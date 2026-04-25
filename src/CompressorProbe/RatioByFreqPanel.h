@@ -4,10 +4,10 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-class EnvelopeFilterPanel : public juce::Component
+class RatioByFreqPanel : public juce::Component
 {
 public:
-    explicit EnvelopeFilterPanel(juce::AudioProcessorValueTreeState& apvts);
+    explicit RatioByFreqPanel(juce::AudioProcessorValueTreeState& apvts);
     void resized() override;
 
 private:
@@ -22,5 +22,5 @@ private:
     juce::AudioProcessorValueTreeState::SliderAttachment mod_amp_attachment;
     ComboBoxWithAttachment length;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EnvelopeFilterPanel)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RatioByFreqPanel)
 };

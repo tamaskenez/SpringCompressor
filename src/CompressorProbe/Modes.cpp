@@ -131,27 +131,27 @@ string_view get_label_for_enum(Mode::E e)
         return "Bypass plus GR tracker signal"sv;
     case Mode::E::DecibelCycle:
         return "Steady state compression curve"sv;
-    case Mode::E::EnvelopeFilter:
-        return "Envelope filter"sv;
+    case Mode::E::RatioByFreq:
+        return "Ratio by freq"sv;
     }
 }
 
-EnvelopeFilterLoopGenerator::EnvelopeFilterLoopGenerator(double fs_arg)
+AMLoopGenerator::AMLoopGenerator(double fs_arg)
     : fs(fs_arg)
 {
 }
 
-void EnvelopeFilterLoopGenerator::init(const Mode::EnvelopeFilter& new_params)
+void AMLoopGenerator::init(const Mode::RatioByFreq& new_params)
 {
     if (params != new_params) {
         params = new_params;
 
         carrier_period_samples = integer_period(fs, new_params.carrier_freq);
-        num_periods = iround<size_t>(
+        num_periods = iround<unsigned>(
           k_decibel_cycle_lengths_msec.at(params.cycle_length_index) / 1000.0 * fs
           / ifcast<double>(carrier_period_samples)
         );
-        cycle_length_samples = iicast<size_t>(carrier_period_samples * num_periods);
+        cycle_length_samples = iicast<unsigned>(carrier_period_samples * num_periods);
 
         const double cls = ifcast<double>(cycle_length_samples);
         T = cls / 2.0 / fs;
@@ -171,7 +171,7 @@ void EnvelopeFilterLoopGenerator::init(const Mode::EnvelopeFilter& new_params)
     }
 }
 
-double EnvelopeFilterLoopGenerator::freq_at_sample(size_t j) const
+double AMLoopGenerator::freq_at_sample(size_t j) const
 {
     if (j < cycle_length_samples / 2) {
         return f0 * exp(k1 * ifcast<double>(j));
@@ -180,8 +180,8 @@ double EnvelopeFilterLoopGenerator::freq_at_sample(size_t j) const
     }
 }
 
-void EnvelopeFilterLoopGenerator::generate_block(
-  const Mode::EnvelopeFilter& new_params, unsigned sample_index, span<float> output_block
+void AMLoopGenerator::generate_block(
+  const Mode::RatioByFreq& new_params, unsigned sample_index, span<float> output_block
 )
 {
     init(new_params);

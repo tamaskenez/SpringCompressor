@@ -207,10 +207,11 @@ void ProbeRole::on_pipe_message_received_mt(span<const char> memory_block)
         processor.mt_state.ao.decibel_cycle.compressor_curve.resize(dc.decibel_cycle_loop_generator.num_periods);
         analyzer_workspace = MOVE(dc);
     } break;
-    EVARIANT_CASE(mt_state.pending_command->mode, Mode, EnvelopeFilter, x) {
-        (void)x;
-        CHECK(false); // TODO
-    }
+    EVARIANT_CASE(mt_state.pending_command->mode, Mode, RatioByFreq, x) {
+        auto y = AnalyzerWorkspace::RatioByFreq(x, *processor.mt_state.sample_rate);
+        mt_state.test_signal_period_samples = iicast<unsigned>(y.g.carrier_period_samples);
+        analyzer_workspace = MOVE(y);
+    } break;
     }
     mt_state.active_command = ActiveCommand{
       .command = *mt_state.pending_command,
@@ -266,6 +267,7 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
     auto& input_block = mt_state.compressor_input_block;
     auto& output_block = mt_state.compressor_output_block;
     while (audio_to_message_queue.try_dequeue(rab_msg)) {
+        const bool last_block_in_batch = audio_to_message_queue.peek() == nullptr;
         auto& rab = received_audio_blocks[rab_msg.rab_index];
         switch (rab.channels_samples.size()) {
         case 1:
@@ -302,7 +304,9 @@ void ProbeRole::on_ui_refresh_timer_elapsed_mt()
             mt_state.compressor_input_block.resize(N);
             processor.mt_state.input_output_next_sample_index_within_period =
               reproduce_compressor_input_block_mt(rab_msg.block_sample_index, mt_state.compressor_input_block);
-            analyze_compressed_block_mt(mt_state.compressor_input_block, mt_state.compressor_output_block);
+            analyze_compressed_block_mt(
+              mt_state.compressor_input_block, mt_state.compressor_output_block, last_block_in_batch
+            );
         } else {
             mt_state.compressor_input_block.assign(N, 0.0f);
         }
@@ -459,14 +463,26 @@ unsigned ProbeRole::reproduce_compressor_input_block_mt(int64_t block_sample_ind
         wsp.block_sample_index_in_cycle = r.block_sample_index_in_cycle;
         return r.next_block_phase;
     }
-    EVARIANT_CASE(mt_state.active_command->command.mode, Mode, EnvelopeFilter, x) {
-        (void)x;
-        CHECK(false); // TODO
+    EVARIANT_CASE(mt_state.active_command->command.mode, Mode, RatioByFreq, x) {
+        auto& aw = mt_state.active_command->analyzer_workspace;
+        auto* awdc = std::get_if<AnalyzerWorkspace::RatioByFreq>(&aw);
+        CHECK(awdc);
+        auto& wsp = *awdc;
+
+        auto r = compute_cycle_bounds(
+          block_sample_index, wsp.g.cycle_length_samples, iicast<unsigned>(wsp.g.carrier_period_samples), input_block
+        );
+
+        wsp.g.generate_block(x, r.sample_index_into_loop, r.input_block_part);
+        wsp.block_sample_index_in_cycle = r.block_sample_index_in_cycle;
+        return r.next_block_phase;
     }
     }
 }
 
-void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<const float> output_block)
+void ProbeRole::analyze_compressed_block_mt(
+  span<const float> input_block, span<const float> output_block, bool /*last_block_in_batch*/
+)
 {
     const auto N = input_block.size();
     CHECK(output_block.size() == N);
@@ -515,6 +531,48 @@ void ProbeRole::analyze_compressed_block_mt(span<const float> input_block, span<
                 x.output_period_sum2 = 0.0;
                 aodc.compressor_curve[period_index] = {input_db, output_db};
                 aodc.last_item_index = period_index;
+            }
+        }
+    } break;
+    EVARIANT_CASE(aw, AnalyzerWorkspace, RatioByFreq, x) {
+        const auto P = ifcast<double>(x.g.carrier_period_samples);
+        // Store each carrier period's levels, input and output
+        for (unsigned i = 0; i < N; ++i) {
+            x.input_period_sum2 += square(input_block[i]);
+            x.output_period_sum2 += square(output_block[i]);
+            const bool finished_last_sample_of_period =
+              (x.block_sample_index_in_cycle + i + 1) % x.g.carrier_period_samples == 0;
+            if (finished_last_sample_of_period) {
+                const auto period_index =
+                  ((x.block_sample_index_in_cycle + i) % x.g.cycle_length_samples) / x.g.carrier_period_samples;
+
+                auto& levels2 = x.input_output_dbs[period_index];
+                levels2 = {matlab::pow2db(x.input_period_sum2 / P), matlab::pow2db(x.output_period_sum2 / P)};
+                x.input_period_sum2 = 0.0;
+                x.output_period_sum2 = 0.0;
+
+                const auto& levels1 = x.input_output_dbs[(period_index + x.g.num_periods - 1) % x.g.num_periods];
+                if (std::isnan(levels1[0]) || std::isnan(levels1[1])) {
+                    continue;
+                }
+
+                const auto d_input_db = levels2[0] - levels1[0];
+                const auto d_output_db = levels2[1] - levels1[1];
+                double ratio;
+                if (d_output_db == 0.0) {
+                    ratio = INFINITY;
+                } else if (d_input_db == 0.0) {
+                    ratio = 0.0;
+                } else {
+                    ratio = d_input_db / d_output_db;
+                }
+                const auto freq_between_periods = x.g.freq_at_sample(period_index * x.g.carrier_period_samples);
+                using Item = CompressorProbeMessageThreadState::AnalyzerOutput::RatioByFreq::Item;
+                if (processor.mt_state.ao.ratio_by_freq.items.size() != x.g.num_periods) {
+                    processor.mt_state.ao.ratio_by_freq.items.resize(x.g.num_periods);
+                }
+                processor.mt_state.ao.ratio_by_freq.items[period_index] =
+                  Item{d_input_db > 0, freq_between_periods, ratio};
             }
         }
     } break;

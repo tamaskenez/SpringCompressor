@@ -40,10 +40,10 @@ CompressorProbeProcessor::CompressorProbeProcessor()
     }
 
 #if 0
-    // TESTING EnvelopeFilter
+    // TESTING RatioByFreq
     double fs = 48000;
-    EnvelopeFilterLoopGenerator g(fs);
-    Mode::EnvelopeFilter p{
+    AMLoopGenerator g(fs);
+    Mode::RatioByFreq p{
       .carrier_freq = 10000,
       .max_carrier_amp_dbfs = -3,
       .min_mod_freq = 100,

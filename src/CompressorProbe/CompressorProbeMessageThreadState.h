@@ -30,6 +30,14 @@ public:
             vector<Item> compressor_curve;
             size_t last_item_index = 0;
         } decibel_cycle;
+        struct RatioByFreq {
+            struct Item {
+                bool attack = false; // Otherwise release.
+                double freq = NAN;
+                double ratio = NAN;
+            };
+            vector<Item> items;
+        } ratio_by_freq;
     } ao;
 
     CompressorProbeMessageThreadState(

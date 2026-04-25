@@ -96,10 +96,10 @@ CompressorProbeEditor::CompressorProbeEditor(
     , mode(state_mt.apvts, "mode", choices_for(state_mt.apvts, "mode"))
     , wave_scope(state_mt.apvts)
     , decibel_cycle_panel(make_unique<DecibelCyclePanel>(state_mt.apvts))
-    , envelope_filter_panel(make_unique<EnvelopeFilterPanel>(state_mt.apvts))
+    , ratio_by_freq_filter_panel(make_unique<RatioByFreqPanel>(state_mt.apvts))
 {
     addChildComponent(*decibel_cycle_panel);
-    addChildComponent(*envelope_filter_panel);
+    addChildComponent(*ratio_by_freq_filter_panel);
     addChildComponent(wave_scope);
     addChildComponent(analyzer_scope);
 
@@ -195,9 +195,9 @@ void CompressorProbeEditor::refresh_probe_ui()
     mode.combo.setEnabled(ts_state.generator_id_in_probe.load() != k_invalid_generator_id);
 
     const bool is_decibel_cycle = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::DecibelCycle));
-    const bool is_envelope_filter = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::EnvelopeFilter));
+    const bool is_ratio_by_freq = (mode.combo.getSelectedItemIndex() == std::to_underlying(Mode::E::RatioByFreq));
     decibel_cycle_panel->setVisible(is_decibel_cycle);
-    envelope_filter_panel->setVisible(is_envelope_filter);
+    ratio_by_freq_filter_panel->setVisible(is_ratio_by_freq);
     wave_scope.setVisible(true);
     analyzer_scope.setVisible(true);
 }
@@ -240,8 +240,8 @@ void CompressorProbeEditor::resized()
         if (decibel_cycle_panel->isVisible()) {
             decibel_cycle_panel->setBounds(left);
         }
-        if (envelope_filter_panel->isVisible()) {
-            envelope_filter_panel->setBounds(left);
+        if (ratio_by_freq_filter_panel->isVisible()) {
+            ratio_by_freq_filter_panel->setBounds(left);
         }
 
         wave_scope.setBounds(area.removeFromTop(area.getWidth() / 2));

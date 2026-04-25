@@ -37,7 +37,7 @@ struct DecibelCycle {
     bool operator==(const DecibelCycle&) const = default;
 };
 
-// A high-frequency carrier is modulated with a low-frequency envelope, from min_mod_freq to max_mod_freq
+// A high-frequency carrier is modulated with a low-frequency sine wave, from min_mod_freq to max_mod_freq
 // (logarithmically) then back.
 //
 // The carrier's
@@ -51,7 +51,7 @@ struct DecibelCycle {
 //     C = (A1 + A2) / 2;
 //     A = (A2 - A1) / 2;
 //     y = (A + C * cos(2 * pi * mod_freq * t)) * cos(2 * pi * carrier_freq * t)
-struct EnvelopeFilter {
+struct RatioByFreq {
     int carrier_freq = INT_MIN;
     int max_carrier_amp_dbfs = INT_MIN;
     int min_mod_freq = INT_MIN;
@@ -59,10 +59,10 @@ struct EnvelopeFilter {
     int mod_amp_db = INT_MIN;
     unsigned cycle_length_index = UINT_MAX; // Into k_decibel_cycle_lengths_msec
 
-    bool operator==(const EnvelopeFilter&) const = default;
+    bool operator==(const RatioByFreq&) const = default;
 };
 
-EVARIANT_DECLARE_E_V(Bypass, DecibelCycle, EnvelopeFilter)
+EVARIANT_DECLARE_E_V(Bypass, DecibelCycle, RatioByFreq)
 } // namespace Mode
 
 string_view get_label_for_enum(Mode::E e);
@@ -97,12 +97,12 @@ private:
     double decibel_for_sample_ix(unsigned sample_ix) const;
 };
 
-struct EnvelopeFilterLoopGenerator {
+struct AMLoopGenerator {
     double fs = NAN;
-    Mode::EnvelopeFilter params;
-    size_t carrier_period_samples = SIZE_T_MAX;
-    size_t num_periods = SIZE_T_MAX;
-    size_t cycle_length_samples = SIZE_T_MAX;
+    Mode::RatioByFreq params;
+    unsigned carrier_period_samples = UINT_MAX;
+    unsigned num_periods = UINT_MAX;
+    unsigned cycle_length_samples = UINT_MAX;
     double T = NAN;
     double f0 = NAN, f1 = NAN;
     double k1 = NAN;
@@ -112,15 +112,15 @@ struct EnvelopeFilterLoopGenerator {
     double f1_over_f0 = NAN;
     double MC = NAN, MA = NAN;
 
-    void init(const Mode::EnvelopeFilter& new_params);
+    void init(const Mode::RatioByFreq& new_params);
 
-    explicit EnvelopeFilterLoopGenerator(double fs);
+    explicit AMLoopGenerator(double fs);
 
     // Generate samples from sample_index .. sample_index + output_block.length()
     // Expects sample_index < total_cycle_samples.
     // Caller needs to reset sample_index to 0 when new_params changes to make sure the condition applies after updating
     // total_cycle_samples.
-    void generate_block(const Mode::EnvelopeFilter& new_params, unsigned sample_index, span<float> output_block);
+    void generate_block(const Mode::RatioByFreq& new_params, unsigned sample_index, span<float> output_block);
 
     double freq_at_sample(size_t j) const;
 };

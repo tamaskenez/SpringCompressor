@@ -1,12 +1,12 @@
-#include "EnvelopeFilterPanel.h"
+#include "RatioByFreqPanel.h"
 
-EnvelopeFilterPanel::EnvelopeFilterPanel(juce::AudioProcessorValueTreeState& apvts)
-    : carrier_freq_attachment(apvts, "envelope_filter_carrier_freq", carrier_freq_slider)
-    , max_carrier_amp_attachment(apvts, "envelope_filter_max_carrier_db", max_carrier_amp_slider)
-    , min_mod_freq_attachment(apvts, "envelope_filter_min_mod_freq", min_mod_freq_slider)
-    , max_mod_freq_attachment(apvts, "envelope_filter_max_mod_freq", max_mod_freq_slider)
-    , mod_amp_attachment(apvts, "envelope_filter_mod_amp_db", mod_amp_slider)
-    , length(apvts, "envelope_filter_length", choices_for(apvts, "envelope_filter_length"))
+RatioByFreqPanel::RatioByFreqPanel(juce::AudioProcessorValueTreeState& apvts)
+    : carrier_freq_attachment(apvts, "ratio_by_freq_carrier_freq", carrier_freq_slider)
+    , max_carrier_amp_attachment(apvts, "ratio_by_freq_max_carrier_db", max_carrier_amp_slider)
+    , min_mod_freq_attachment(apvts, "ratio_by_freq_min_mod_freq", min_mod_freq_slider)
+    , max_mod_freq_attachment(apvts, "ratio_by_freq_max_mod_freq", max_mod_freq_slider)
+    , mod_amp_attachment(apvts, "ratio_by_freq_mod_amp_db", mod_amp_slider)
+    , length(apvts, "ratio_by_freq_length", choices_for(apvts, "ratio_by_freq_length"))
 {
     auto setup_label = [](juce::Label& lbl, const juce::String& text) {
         lbl.setText(text, juce::dontSendNotification);
@@ -45,7 +45,7 @@ EnvelopeFilterPanel::EnvelopeFilterPanel(juce::AudioProcessorValueTreeState& apv
     }
 }
 
-void EnvelopeFilterPanel::resized()
+void RatioByFreqPanel::resized()
 {
     const int label_w = 110;
     const int ctrl_gap = 8;

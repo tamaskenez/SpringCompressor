@@ -35,20 +35,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         2
       ),
       make_unique<juce::AudioParameterInt>(
-        juce::ParameterID{"envelope_filter_carrier_freq", 1}, "Carrier Freq", 100, 10000, 1000
+        juce::ParameterID{"ratio_by_freq_carrier_freq", 1}, "Carrier Freq", 100, 10000, 1000
+      ),
+      make_unique<juce::AudioParameterInt>(juce::ParameterID{"ratio_by_freq_max_carrier_db", 1}, "Max Amp", -60, 0, -6),
+      make_unique<juce::AudioParameterInt>(
+        juce::ParameterID{"ratio_by_freq_min_mod_freq", 1}, "Min Mod Freq", 1, 1000, 10
       ),
       make_unique<juce::AudioParameterInt>(
-        juce::ParameterID{"envelope_filter_max_carrier_db", 1}, "Max Amp", -60, 0, -6
+        juce::ParameterID{"ratio_by_freq_max_mod_freq", 1}, "Max Mod Freq", 1, 10000, 1000
       ),
-      make_unique<juce::AudioParameterInt>(
-        juce::ParameterID{"envelope_filter_min_mod_freq", 1}, "Min Mod Freq", 1, 1000, 10
-      ),
-      make_unique<juce::AudioParameterInt>(
-        juce::ParameterID{"envelope_filter_max_mod_freq", 1}, "Max Mod Freq", 1, 10000, 1000
-      ),
-      make_unique<juce::AudioParameterInt>(juce::ParameterID{"envelope_filter_mod_amp_db", 1}, "Mod Amp", 0, 60, 20),
+      make_unique<juce::AudioParameterInt>(juce::ParameterID{"ratio_by_freq_mod_amp_db", 1}, "Mod Amp", 0, 60, 20),
       make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID{"envelope_filter_length", 1},
+        juce::ParameterID{"ratio_by_freq_length", 1},
         "Length",
         juce::StringArray{"500 ms", "1000 ms", "2000 ms", "4000 ms", "8000 ms"},
         2

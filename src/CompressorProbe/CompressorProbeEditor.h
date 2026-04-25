@@ -2,7 +2,7 @@
 
 #include "AnalyzerScope.h"
 #include "DecibelCyclePanel.h"
-#include "EnvelopeFilterPanel.h"
+#include "RatioByFreqPanel.h"
 #include "Role.h"
 #include "WaveScope.h"
 #include "juce_util/misc.h"
@@ -65,7 +65,7 @@ public:
 
 private:
     std::unique_ptr<DecibelCyclePanel> decibel_cycle_panel;
-    std::unique_ptr<EnvelopeFilterPanel> envelope_filter_panel;
+    std::unique_ptr<RatioByFreqPanel> ratio_by_freq_filter_panel;
     std::unique_ptr<RoleSelectionOverlay> role_overlay;
     juce::Label title_label, role_label, error_label;
 

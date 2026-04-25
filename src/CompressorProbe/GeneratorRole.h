@@ -46,7 +46,7 @@ private:
     unsigned tone_playhead = 0;
     optional<Command> current_command;
     DecibelCycleLoopGenerator decibel_cycle_loop_generator;
-    EnvelopeFilterLoopGenerator envelope_filter_loop_generator;
+    AMLoopGenerator am_loop_generator;
     size_t silent_samples_after_new_command = 0;
     span<const float> sync_signal_to_transmit;
     vector<float> output_block;

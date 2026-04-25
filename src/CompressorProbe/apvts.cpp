@@ -43,15 +43,15 @@ Mode::DecibelCycle get_mode_decibel_cycle(const juce::AudioProcessorValueTreeSta
     };
 }
 
-Mode::EnvelopeFilter get_envelope_filter(const juce::AudioProcessorValueTreeState& apvts)
+Mode::RatioByFreq get_ratio_by_freq(const juce::AudioProcessorValueTreeState& apvts)
 {
-    return Mode::EnvelopeFilter{
-      .carrier_freq = get_int(apvts, "envelope_filter_carrier_freq"),
-      .max_carrier_amp_dbfs = get_int(apvts, "envelope_filter_max_carrier_db"),
-      .min_mod_freq = get_int(apvts, "envelope_filter_min_mod_freq"),
-      .max_mod_freq = get_int(apvts, "envelope_filter_max_mod_freq"),
-      .mod_amp_db = get_int(apvts, "envelope_filter_mod_amp_db"),
-      .cycle_length_index = sucast(get_choice_index(apvts, "envelope_filter_length")),
+    return Mode::RatioByFreq{
+      .carrier_freq = get_int(apvts, "ratio_by_freq_carrier_freq"),
+      .max_carrier_amp_dbfs = get_int(apvts, "ratio_by_freq_max_carrier_db"),
+      .min_mod_freq = get_int(apvts, "ratio_by_freq_min_mod_freq"),
+      .max_mod_freq = get_int(apvts, "ratio_by_freq_max_mod_freq"),
+      .mod_amp_db = get_int(apvts, "ratio_by_freq_mod_amp_db"),
+      .cycle_length_index = sucast(get_choice_index(apvts, "ratio_by_freq_length")),
     };
 }
 
@@ -62,7 +62,7 @@ Mode::V get_mode_v(const juce::AudioProcessorValueTreeState& apvts)
         return Mode::Bypass{};
     case Mode::E::DecibelCycle:
         return get_mode_decibel_cycle(apvts);
-    case Mode::E::EnvelopeFilter:
-        return get_envelope_filter(apvts);
+    case Mode::E::RatioByFreq:
+        return get_ratio_by_freq(apvts);
     }
 }

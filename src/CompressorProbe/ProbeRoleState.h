@@ -2,6 +2,7 @@
 
 #include "Command.h"
 #include "Modes.h"
+#include "meadow/array.h"
 #include "meadow/inplace_vector.h"
 
 class Pipe;
@@ -21,7 +22,16 @@ struct DecibelCycle {
     DecibelCycle(const Mode::DecibelCycle& decibel_cycle_params, double sample_rate);
 };
 
-EVARIANT_DECLARE_E_V(Bypass, DecibelCycle)
+struct RatioByFreq {
+    AMLoopGenerator g;
+    unsigned block_sample_index_in_cycle = 0;
+    double input_period_sum2 = 0.0, output_period_sum2 = 0.0;
+    vector<AD2> input_output_dbs;
+
+    RatioByFreq(const Mode::RatioByFreq& params, double sample_rate);
+};
+
+EVARIANT_DECLARE_E_V(Bypass, DecibelCycle, RatioByFreq)
 } // namespace AnalyzerWorkspace
 
 struct ActiveCommand {
