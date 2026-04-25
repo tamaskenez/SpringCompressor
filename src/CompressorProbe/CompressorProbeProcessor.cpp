@@ -297,6 +297,12 @@ void CompressorProbeProcessor::parameterChanged(const juce::String& parameter_id
     case ParameterID::steady_curve_min_dbfs:
     case ParameterID::steady_curve_max_dbfs:
     case ParameterID::steady_curve_length:
+    case ParameterID::ratio_by_freq_carrier_freq:
+    case ParameterID::ratio_by_freq_max_carrier_db:
+    case ParameterID::ratio_by_freq_min_mod_freq:
+    case ParameterID::ratio_by_freq_max_mod_freq:
+    case ParameterID::ratio_by_freq_mod_amp_db:
+    case ParameterID::ratio_by_freq_length:
         call_async_on_mt([this] {
             auto* p = dynamic_cast<ProbeRole*>(ts_state.role_impl.load());
             CHECK(p);
